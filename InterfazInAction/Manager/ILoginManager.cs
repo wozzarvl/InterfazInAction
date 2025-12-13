@@ -6,5 +6,7 @@ namespace InterfazInAction.Manager
     {
         AuthResponseModel  Login(LoginModel login);
         AuthResponseModel RefreshToken(AuthResponseModel request);
+
+        string Register(LoginModel login, string role);
     }
 }

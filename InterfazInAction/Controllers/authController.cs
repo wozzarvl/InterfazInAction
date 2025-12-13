@@ -67,6 +67,26 @@ namespace InterfazInAction.Controllers
             return Ok(resultado);
         }
 
+
+        [HttpPost("register")]
+        [AllowAnonymous] // Permitimos registrar el primer usuario sin estar logueados
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(object), StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+        public IActionResult Register([FromBody] LoginModel login, [FromQuery] string role = "administrador")
+        {
+            // Llamamos al manager
+            var resultado = _loginManager.Register(login, role);
+
+            if (resultado.Contains("ya existe"))
+            {
+                return BadRequest(new { message = resultado });
+            }
+
+            return Ok(new { message = resultado });
+        }
+
+
         [Authorize]
         [HttpGet("prueba")]
         public IActionResult prueba()

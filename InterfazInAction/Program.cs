@@ -2,6 +2,10 @@ using InterfazInAction.Manager;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using InterfazInAction.Data;
+using Microsoft.EntityFrameworkCore;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +16,15 @@ var issuer = jwtSettings.GetValue<string>("Issuer");
 var audience = jwtSettings.GetValue<string>("Audience");
 
 var keyBytes = Encoding.UTF8.GetBytes(secretKey!);
+
+// ---------------------------------------------------------
+//  Configuración de Base de Datos (PostgreSQL)
+// ---------------------------------------------------------
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString));
+//---------------------------------------------------------
 
 // Add services to the container.
 
