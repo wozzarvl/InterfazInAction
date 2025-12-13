@@ -37,9 +37,13 @@ namespace InterfazInAction.Manager
 
         };
 
+            int minutos = login.Duracion.HasValue ? login.Duracion.Value : 0;
+
             // 3. Generar Tokens
-            var jwtToken = GenerateAccessToken(claims);
+            var jwtToken = GenerateAccessToken(claims,minutos);
             var refreshToken = GenerateRefreshTokenString();
+
+            
 
             // 4. Guardar Refresh Token
             var refreshTokenEntity = new RefreshToken
@@ -75,7 +79,7 @@ namespace InterfazInAction.Manager
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-            var newJwt = GenerateAccessToken(newClaims);
+            var newJwt = GenerateAccessToken(newClaims,0);
             var newRefresh = GenerateRefreshTokenString();
 
             UserRefreshTokens.Add(new RefreshToken
@@ -94,7 +98,7 @@ namespace InterfazInAction.Manager
         }
 
         // Métodos privados auxiliares
-        private JwtSecurityToken GenerateAccessToken(IEnumerable<Claim> claims)
+        private JwtSecurityToken GenerateAccessToken(IEnumerable<Claim> claims,int minutos)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -104,7 +108,7 @@ namespace InterfazInAction.Manager
                 audience: _configuration["JwtSettings:Audience"],
                 claims: claims,
 
-                expires: DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:DurationInMinutes"])),
+                expires: minutos!=0?DateTime.Now.AddMinutes( minutos):  DateTime.Now.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:DurationInMinutes"])),
                 signingCredentials: creds
             );
         }
