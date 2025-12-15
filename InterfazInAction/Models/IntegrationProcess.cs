@@ -10,6 +10,10 @@ namespace InterfazInAction.Models
         public string ProcessName { get; set; } // Ej: "SAP_MATERIAL_IMPORT"
 
         [Required]
+        [MaxLength(50)]
+        public string InterfaceName { get; set; } // Ej: "MMI019" (Puede repetirse en varios procesos)
+
+        [Required]
         [MaxLength(100)]
         public string TargetTable { get; set; } // Ej: "erp.item"
 
