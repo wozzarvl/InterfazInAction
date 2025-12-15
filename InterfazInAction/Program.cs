@@ -58,6 +58,7 @@ builder.Services.AddAuthentication(config => {
 
 
 builder.Services.AddScoped<ILoginManager, LoginManager>();
+builder.Services.AddScoped<IDynamicXmlManager, DynamicXmlManager>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

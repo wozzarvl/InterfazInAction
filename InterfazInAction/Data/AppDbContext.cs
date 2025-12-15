@@ -12,8 +12,8 @@ namespace InterfazInAction.Data
         // Aquí registramos nuestros modelos
         public DbSet<User> Users { get; set; }
 
-        // Más adelante, aquí agregaremos:
-        // public DbSet<IntegrationProcess> IntegrationProcesses { get; set; }
-        // public DbSet<IntegrationField> IntegrationFields { get; set; }
+      
+        public DbSet<IntegrationProcess> IntegrationProcesses { get; set; }
+        public DbSet<IntegrationField> IntegrationFields { get; set; }
     }
 }
