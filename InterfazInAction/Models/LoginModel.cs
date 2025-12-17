@@ -4,12 +4,12 @@ namespace InterfazInAction.Models
 {
     public class LoginModel
     {
-        // DataAnnotations ayudan a validar automáticamente en el Controller
+     
         [Required(ErrorMessage = "El usuario es requerido.")]
-        public string Usuario { get; set; } // O ClientId
+        public string Usuario { get; set; } 
 
         [Required(ErrorMessage = "La contraseña es requerida.")]
-        public string Password { get; set; } // O ClientSecret
+        public string Password { get; set; } 
 
         /// <summary>
         /// (Opcional) Duración deseada del token en minutos. 

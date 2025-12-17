@@ -12,9 +12,9 @@ namespace InterfazInAction.Manager
     public class LoginManager : ILoginManager
     {
         private readonly IConfiguration _configuration;
-        private readonly AppDbContext _context; // Inyectamos el contexto de BD
+        private readonly AppDbContext _context; 
 
-        // "Base de datos" temporal de refresh tokens (Idealmente esto también debería ir a una tabla en Postgres)
+        
         private static List<RefreshToken> UserRefreshTokens = new List<RefreshToken>();
 
         public LoginManager(IConfiguration configuration, AppDbContext context)
@@ -25,37 +25,36 @@ namespace InterfazInAction.Manager
 
         public AuthResponseModel Login(LoginModel login)
         {
-            // 1. Buscar el usuario en la base de datos (PostgreSQL)
+            
             var user = _context.Users.FirstOrDefault(u => u.UserName == login.Usuario);
 
-            // 2. Validar si el usuario existe
+            
             if (user == null)
             {
-                return null; // Usuario no encontrado
+                return null; 
             }
 
-            // 3. Validar la contraseña usando BCrypt
-            // Compara la contraseña plana (login.Password) con el hash de la BD (user.PasswordHash)
+            
             bool passwordValida = BCrypt.Net.BCrypt.Verify(login.Password, user.PasswordHash);
             //string hasheado = BCrypt.Net.BCrypt.HashPassword("l4l4In4ct10n");
 
             if (!passwordValida)
             {
-                return null; // Contraseña incorrecta
+                return null; 
             }
 
-            // 4. Si llegamos aquí, las credenciales son válidas. Generamos los Claims.
+            
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new Claim("rol", user.Role), // Usamos el rol que viene de la BD
+                new Claim("rol", user.Role),
                 new Claim("id", user.Id.ToString())
             };
 
             int minutos = login.Duracion.HasValue ? login.Duracion.Value : 0;
 
-            // 5. Generar Tokens
+            
             var jwtToken = GenerateAccessToken(claims, minutos);
             var refreshToken = GenerateRefreshTokenString();
 
@@ -109,7 +108,6 @@ namespace InterfazInAction.Manager
             };
         }
 
-        // Métodos privados auxiliares (Sin cambios mayores)
         private JwtSecurityToken GenerateAccessToken(IEnumerable<Claim> claims, int minutos)
         {
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JwtSettings:Key"]!));
@@ -144,8 +142,7 @@ namespace InterfazInAction.Manager
                 return $"El usuario '{login.Usuario}' ya existe.";
             }
 
-            // 2. Encriptar contraseña
-            // Esto genera el hash seguro (ej. $2a$11$...) con sal automática.
+         
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(login.Password);
 
             // 3. Crear entidad User

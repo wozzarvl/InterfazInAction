@@ -33,27 +33,27 @@ namespace InterfazInAction.Models
 
         [Required]
         [MaxLength(50)]
-        public string ProcessName { get; set; } // Foreign Key
+        public string ProcessName { get; set; } 
 
         [MaxLength(200)]
-        public string XmlPath { get; set; }    // Tag en XML (Ej: "MATNR"). Puede ser NULL para valores fijos.
+        public string? XmlPath { get; set; }    
 
         [Required]
         [MaxLength(100)]
-        public string DbColumn { get; set; }   // Columna en Postgres (Ej: "code")
+        public string DbColumn { get; set; }  
 
         [MaxLength(50)]
-        public string DataType { get; set; }   // "string", "int", "decimal", "CURRENT_TIMESTAMP"
+        public string DataType { get; set; }   
 
-        public string DefaultValue { get; set; } // Valor usado si XmlPath es null o no viene en el XML
-
-        [MaxLength(100)]
-        public string ReferenceTable { get; set; }  // Ej: "erp.item_group"
+        public string? DefaultValue { get; set; } 
 
         [MaxLength(100)]
-        public string ReferenceColumn { get; set; } // Ej: "name"
+        public string? ReferenceTable { get; set; }  
 
-        // Navegación (opcional, pero recomendada para EF Core)
+        [MaxLength(100)]
+        public string? ReferenceColumn { get; set; } 
+        public bool IsKey { get; set; } = false; 
+       
         [ForeignKey("ProcessName")]
         public IntegrationProcess Process { get; set; }
     }

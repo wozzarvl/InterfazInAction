@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace InterfazInAction.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v1/[controller]")]
     public class IntegrationController : ControllerBase
     {
         private readonly IDynamicXmlManager _xmlManager;
@@ -16,16 +16,15 @@ namespace InterfazInAction.Controllers
         }
 
         /// <summary>
-        /// Recibe un XML genérico y lo procesa según el nombre del proceso configurado en BD.
+        /// Recibe un XML y ejecuta TODOS los procesos configurados para la interfaz especificada.
+        /// (Ej: Inserta en Items y en SKUs bajo una misma transacción)
         /// </summary>
-        /// <param name="processName">El nombre del proceso (ej: SAP_MATERIAL_ITEM)</param>
-        /// <returns>Resultado de la inserción</returns>
-        [HttpPost("{processName}")]
-        [Authorize]
-        public async Task<IActionResult> ReceiveXml(string processName)
+        /// <param name="interfaceName">El nombre de la interfaz (ej: MMI019)</param>
+        /// <returns>Total de registros insertados en todas las tablas</returns>
+        [HttpPost("{interfaceName}")]
+        public async Task<IActionResult> ReceiveXml(string interfaceName)
         {
-            // 1. Leer el XML crudo directamente del cuerpo de la petición (Request Body)
-            // Hacemos esto para evitar problemas de formateo automático de ASP.NET
+         
             using var reader = new StreamReader(Request.Body);
             var xmlContent = await reader.ReadToEndAsync();
 
@@ -36,25 +35,24 @@ namespace InterfazInAction.Controllers
 
             try
             {
-                // 2. Llamar al Manager Dinámico
-                int rowsAffected = await _xmlManager.ProcessXmlAsync(processName, xmlContent);
+         
+                int totalRows = await _xmlManager.ProcessXmlAsync(interfaceName, xmlContent);
 
                 return Ok(new
                 {
                     status = "Success",
-                    process = processName,
-                    rowsInserted = rowsAffected,
+                    interfaceName = interfaceName,
+                    totalRowsInserted = totalRows,
                     timestamp = DateTime.UtcNow
                 });
             }
             catch (Exception ex)
             {
-                // Si falla (configuración no encontrada, XML malformado, error SQL), devolvemos 400
                 return BadRequest(new
                 {
                     status = "Error",
                     message = ex.Message,
-                    // innerException = ex.InnerException?.Message // Descomentar para depurar si es necesario
+                    // innerException = ex.InnerException?.Message 
                 });
             }
         }

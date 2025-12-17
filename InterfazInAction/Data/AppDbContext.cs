@@ -9,7 +9,7 @@ namespace InterfazInAction.Data
         {
         }
 
-        // Aquí registramos nuestros modelos
+       
         public DbSet<User> Users { get; set; }
 
       

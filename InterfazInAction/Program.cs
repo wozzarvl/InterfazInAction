@@ -36,22 +36,21 @@ builder.Services.AddAuthentication(config => {
     config.SaveToken = true;
     config.TokenValidationParameters = new TokenValidationParameters
             {
-                // Validar que el token fue firmado por nosotros
+                
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
 
-                // Validar quién emitió el token (opcional pero recomendado)
+               
                 ValidateIssuer = true,
                 ValidIssuer = issuer,
 
-                // Validar para quién es el token (opcional pero recomendado)
+                
                 ValidateAudience = true,
                 ValidAudience = audience,
 
                 
 
-                // Importante: Evita el margen de error de tiempo (por defecto es 5 min)
-                // Si el token expira, expira YA.
+               
                 ClockSkew = TimeSpan.Zero
             };
         });
@@ -68,7 +67,30 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+
+
+// --- INICIO DEL BLOQUE DE AUTO-DEPLOY ---
+// Creamos un scope temporal para obtener los servicios
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        
+        var context = services.GetRequiredService<AppDbContext>();
+
+        //  Migraciones + Seed
+        DbInitializer.Initialize(context);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Ocurrió un error al inicializar la base de datos.");
+    }
+}
+// --- FIN DEL BLOQUE DE AUTO-DEPLOY ---
+
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

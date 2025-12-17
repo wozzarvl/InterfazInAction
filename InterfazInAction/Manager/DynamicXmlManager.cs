@@ -17,194 +17,198 @@ namespace InterfazInAction.Manager
             _configuration = configuration;
         }
 
-        public async Task<int> ProcessXmlAsync(string processName, string xmlContent)
+        public async Task<int> ProcessXmlAsync(string interfaceName, string xmlContent)
         {
-            // 1. CARGAR CONFIGURACIÓN DESDE LA BASE DE DATOS
-            // Buscamos el proceso y sus campos asociados
-            var processConfig = await _context.IntegrationProcesses
+            
+            var configs = await _context.IntegrationProcesses
                 .Include(p => p.Fields)
-                .FirstOrDefaultAsync(p => p.ProcessName == processName);
+                .Where(p => p.InterfaceName == interfaceName)
+                .ToListAsync();
 
-            if (processConfig == null)
-                throw new Exception($"El proceso de integración '{processName}' no está configurado en la base de datos.");
+            if (!configs.Any())
+                throw new Exception($"No se encontraron procesos configurados para la interfaz '{interfaceName}'.");
 
-            if (processConfig.Fields == null || !processConfig.Fields.Any())
-                throw new Exception($"El proceso '{processName}' no tiene campos mapeados.");
-
-            // 2. PARSEAR EL XML
+         
             var xDoc = XDocument.Parse(xmlContent);
 
-            // 3. SELECCIONAR NODOS A ITERAR
-            // Usamos el XPath definido en BD (ej. "//*[local-name()='DT_MaterialesDetalleSAP']")
-            var nodes = xDoc.XPathSelectElements(processConfig.XmlIterator).ToList();
+            int totalInserted = 0;
 
-            if (!nodes.Any()) return 0; // No se encontraron datos para procesar
-
-            int insertedCount = 0;
+           
             var connectionString = _configuration.GetConnectionString("WmsConnection");
 
-            // 4. PREPARAR CONEXIÓN RAW A POSTGRES (ADO.NET)
+      
             using (var conn = new NpgsqlConnection(connectionString))
             {
                 await conn.OpenAsync();
 
-                // Usamos una transacción para garantizar integridad: O se inserta todo el lote o nada.
                 using (var transaction = await conn.BeginTransactionAsync())
                 {
                     try
                     {
-                        foreach (var node in nodes)
+               
+                        foreach (var processConfig in configs)
                         {
-                            // Listas para construir el query dinámico
-                            var colNames = new List<string>();
-                            var paramNames = new List<string>();
+                       
+                            var nodes = xDoc.XPathSelectElements(processConfig.XmlIterator).ToList();
 
+                            if (!nodes.Any()) continue; 
+
+                           
                             var cmd = new NpgsqlCommand();
                             cmd.Connection = conn;
                             cmd.Transaction = transaction;
 
-                            // Recorremos cada campo configurado en la tabla IntegrationFields
-                            foreach (var field in processConfig.Fields)
+                            foreach (var node in nodes)
                             {
-                                object dbVal = null;
+                                var colNames = new List<string>();
+                                var paramNames = new List<string>();
+                                cmd.Parameters.Clear(); 
 
-                                // --- LÓGICA DE OBTENCIÓN DE VALOR ---
+                                // Mapeo de campos
+                                foreach (var field in processConfig.Fields)
+                                {
+                                    object dbVal = null;
 
-                                // CASO A: Valor de Sistema (ej. Fecha Actual)
-                                if (field.DataType == "CURRENT_TIMESTAMP")
-                                {
-                                    dbVal = DateTime.Now; //DateTime.UtcNow; // O DateTime.Now según tu zona horaria
-                                }
-                                // CASO B: Valor Fijo (XmlPath es nulo)
-                                else if (string.IsNullOrEmpty(field.XmlPath))
-                                {
-                                    dbVal = ConvertValue(field.DefaultValue, field.DataType);
-                                }
-                                // CASO C: Valor proveniente del XML
-                                else
-                                {
-                                    string valStr = GetValueFromXml(node, field.XmlPath);
-
-                                    // Si viene vacío del XML, intentamos usar el DefaultValue
-                                    if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
+                                   
+                                    if (field.DataType == "CURRENT_TIMESTAMP")
                                     {
-                                        valStr = field.DefaultValue;
+                                        dbVal = DateTime.Now;
+                                    }
+                                    else if (string.IsNullOrEmpty(field.XmlPath))
+                                    {
+                                        dbVal = ConvertValue(field.DefaultValue, field.DataType);
+                                    }
+                                    else
+                                    {
+                                        string valStr = GetValueFromXml(node, field.XmlPath);
+                                        if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
+                                        {
+                                            valStr = field.DefaultValue;
+                                        }
+                                        dbVal = ConvertValue(valStr, field.DataType);
                                     }
 
-                                    dbVal = ConvertValue(valStr, field.DataType);
-                                }
-
-                                // --- AGREGAR AL COMANDO SQL ---
-                                // Solo agregamos columnas si tenemos un valor (o si quieres permitir nulos explícitos)
-                                if (dbVal != null)
-                                {
-                                    //Validacion de que si el campo hace referencia a otra tabla  haga el insert para que no de error de llave foranea
-                                    if (!string.IsNullOrEmpty(field.ReferenceTable) && !string.IsNullOrEmpty(field.ReferenceColumn))
+                                    
+                                    if (dbVal != null)
                                     {
-                                        // Truco de PostgreSQL: INSERT ... ON CONFLICT DO NOTHING
-                                        // Esto asume que ReferenceColumn tiene una restricción UNIQUE en la tabla destino
-                                        string depSql = $@"
-                                                        INSERT INTO {field.ReferenceTable} (""{field.ReferenceColumn}"",created_at,updated_at) 
-                                                        VALUES (@val,@valcreated_at,@valupdated_at) 
-                                                        ON CONFLICT (""{field.ReferenceColumn}"") DO NOTHING";
+                                        
+                                        if (!string.IsNullOrEmpty(field.ReferenceTable) && !string.IsNullOrEmpty(field.ReferenceColumn))
+                                        {
+                                            
+                                            string depSql = $@"
+                                                INSERT INTO {field.ReferenceTable} (""{field.ReferenceColumn}"",created_at,updated_at) 
+                                                VALUES (@valRef,@valcreated_at,@valupdated_at) 
+                                                ON CONFLICT (""{field.ReferenceColumn}"") DO NOTHING";
 
-                                        var depCmd = new NpgsqlCommand(depSql, conn, transaction);
-                                        depCmd.Parameters.AddWithValue("@val", dbVal);
-                                        depCmd.Parameters.AddWithValue("@valcreated_at", DateTime.Now);
-                                        depCmd.Parameters.AddWithValue("@valupdated_at", DateTime.Now);
-                                        await depCmd.ExecuteNonQueryAsync();
+                                            using (var depCmd = new NpgsqlCommand(depSql, conn, transaction))
+                                            {
+                                                depCmd.Parameters.AddWithValue("@valRef", dbVal);
+                                                depCmd.Parameters.AddWithValue("@valcreated_at", DateTime.Now);
+                                                depCmd.Parameters.AddWithValue("@valupdated_at", DateTime.Now);
+                                                await depCmd.ExecuteNonQueryAsync();
+                                            }
+                                        }
+                                        // -------------------------------------------------------------
+
+                                        colNames.Add($"\"{field.DbColumn}\"");
+                                        string pName = $"@p{paramNames.Count}";
+                                        paramNames.Add(pName);
+                                        cmd.Parameters.AddWithValue(pName, dbVal);
                                     }
-
-
-                                    // Agregamos comillas al nombre de la columna para proteger mayúsculas/minúsculas en Postgres
-                                    colNames.Add($"\"{field.DbColumn}\"");
-
-                                    string pName = $"@p{paramNames.Count}"; // Nombre del parámetro: @p0, @p1...
-                                    paramNames.Add(pName);
-
-                                    cmd.Parameters.AddWithValue(pName, dbVal);
                                 }
-                            }
 
-                            // 5. EJECUTAR INSERT SI HAY DATOS
-                            if (colNames.Count > 0)
-                            {
-                                // Construcción del SQL: INSERT INTO tabla (col1, col2) VALUES (@p0, @p1)
-                                string sql = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+                                
+                                if (colNames.Count > 0)
+                                {
+                                    //cmd.CommandText = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+                                    string sql = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+                                    
+                                    var keyFields = processConfig.Fields.Where(f => f.IsKey).ToList();
 
-                                // Opcional: Manejo de conflictos (Upsert) si ya existe el código
-                                // sql += " ON CONFLICT (code) DO NOTHING"; 
+                                    if (keyFields.Any())
+                                    {
+                                        
+                                        var keyCols = keyFields.Select(f => $"\"{f.DbColumn}\"");
+                                        sql += $" ON CONFLICT ({string.Join(", ", keyCols)})";
 
-                                cmd.CommandText = sql;
-                                await cmd.ExecuteNonQueryAsync();
-                                insertedCount++;
+                                        
+                                        var updateFields = processConfig.Fields
+                                            .Where(f => !f.IsKey && f.DbColumn != "created_at")
+                                            .ToList();
+
+                                        if (updateFields.Any())
+                                        {
+                                            sql += " DO UPDATE SET ";
+
+                                            var updateParts = new List<string>();
+                                            foreach (var f in updateFields)
+                                            {
+                                                
+                                                updateParts.Add($"\"{f.DbColumn}\" = EXCLUDED.\"{f.DbColumn}\"");
+                                            }
+
+                                            sql += string.Join(", ", updateParts);
+                                        }
+                                        else
+                                        {
+                                           
+                                            sql += " DO NOTHING";
+                                        }
+                                    }
+                                    cmd.CommandText = sql;
+                                    await cmd.ExecuteNonQueryAsync();
+                                    totalInserted++;
+                                }
                             }
                         }
 
-                        // Si todo sale bien, confirmamos los cambios en la BD
+                        
                         await transaction.CommitAsync();
                     }
                     catch (Exception)
                     {
-                        // Si algo falla, revertimos todo para no dejar datos corruptos
+                        
                         await transaction.RollbackAsync();
-                        throw; // Re-lanzamos el error para que lo vea el Controller
+                        throw;
                     }
                 }
             }
 
-            return insertedCount;
+            return totalInserted;
         }
 
-        // --- MÉTODOS AUXILIARES ---
 
-        /// <summary>
-        /// Busca un valor en el nodo XML, soportando rutas complejas (ej "Header/Date") 
-        /// e ignorando Namespaces (n0:)
-        /// </summary>
         private string GetValueFromXml(XElement parentNode, string path)
         {
             if (parentNode == null || string.IsNullOrEmpty(path)) return null;
-
             XElement current = parentNode;
-            var parts = path.Split('/'); // Soporte para niveles: "DT_UM/MEINH"
-
+            var parts = path.Split('/');
             foreach (var part in parts)
             {
                 if (current == null) return null;
-
-                // Buscamos el hijo ignorando el namespace (n0:MATNR == MATNR)
-                current = current.Elements()
-                    .FirstOrDefault(e => e.Name.LocalName.Equals(part, StringComparison.OrdinalIgnoreCase));
+                current = current.Elements().FirstOrDefault(e => e.Name.LocalName.Equals(part, StringComparison.OrdinalIgnoreCase));
             }
-
             return current?.Value;
         }
 
-        /// <summary>
-        /// Convierte el string del XML al tipo de dato real de C#/Postgres
-        /// </summary>
         private object ConvertValue(string val, string type)
         {
             if (string.IsNullOrWhiteSpace(val)) return DBNull.Value;
-            if (string.IsNullOrEmpty(type)) return val; // Si no hay tipo, se va como string
-
+            if (string.IsNullOrEmpty(type)) return val;
             try
             {
                 return type.ToLower() switch
                 {
                     "int" => int.Parse(val),
-                    // Decimal: Importante manejar puntos vs comas según cultura
                     "decimal" => decimal.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
                     "float" => float.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
-                    "boolean" => (val == "1" || val.ToUpper() == "TRUE" || val.ToUpper() == "X"), // SAP usa "X" a veces
+                    "boolean" => (val == "1" || val.ToUpper() == "TRUE" || val.ToUpper() == "X"),
                     "datetime" => DateTime.Parse(val),
-                    _ => val // Por defecto string
+                    _ => val
                 };
             }
             catch
             {
-                // Si falla la conversión (ej: fecha inválida), retornamos null o lanzamos error según prefieras
                 return DBNull.Value;
             }
         }
