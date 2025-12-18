@@ -20,7 +20,7 @@ namespace InterfazInAction.Manager
         public async Task<int> ProcessXmlAsync(string interfaceName, string xmlContent)
         {
             
-            var configs = await _context.IntegrationProcesses
+            var configs = await _context.integrationProcesses
                 .Include(p => p.Fields)
                 .Where(p => p.InterfaceName == interfaceName)
                 .ToListAsync();

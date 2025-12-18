@@ -26,7 +26,7 @@ namespace InterfazInAction.Manager
         public AuthResponseModel Login(LoginModel login)
         {
             
-            var user = _context.Users.FirstOrDefault(u => u.UserName == login.Usuario);
+            var user = _context.users.FirstOrDefault(u => u.UserName == login.Usuario);
 
             
             if (user == null)
@@ -137,7 +137,7 @@ namespace InterfazInAction.Manager
         public string Register(LoginModel login, string role)
         {
             // 1. Verificar si el usuario ya existe
-            if (_context.Users.Any(u => u.UserName == login.Usuario))
+            if (_context.users.Any(u => u.UserName == login.Usuario))
             {
                 return $"El usuario '{login.Usuario}' ya existe.";
             }
@@ -146,7 +146,7 @@ namespace InterfazInAction.Manager
             string passwordHash = BCrypt.Net.BCrypt.HashPassword(login.Password);
 
             // 3. Crear entidad User
-            var newUser = new User
+            var newUser = new user
             {
                 UserName = login.Usuario,
                 PasswordHash = passwordHash,
@@ -156,7 +156,7 @@ namespace InterfazInAction.Manager
             };
 
             // 4. Guardar en BD
-            _context.Users.Add(newUser);
+            _context.users.Add(newUser);
             _context.SaveChanges();
 
             return "Usuario creado exitosamente.";

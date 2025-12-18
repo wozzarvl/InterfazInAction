@@ -10,10 +10,10 @@ namespace InterfazInAction.Data
         }
 
        
-        public DbSet<User> Users { get; set; }
+        public DbSet<user> users { get; set; }
 
       
-        public DbSet<IntegrationProcess> IntegrationProcesses { get; set; }
-        public DbSet<IntegrationField> IntegrationFields { get; set; }
+        public DbSet<integrationProcess> integrationProcesses { get; set; }
+        public DbSet<integrationField> integrationFields { get; set; }
     }
 }

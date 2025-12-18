@@ -13,7 +13,7 @@ namespace InterfazInAction.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "IntegrationProcesses",
+                name: "integrationProcesses",
                 columns: table => new
                 {
                     ProcessName = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
@@ -23,11 +23,11 @@ namespace InterfazInAction.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_IntegrationProcesses", x => x.ProcessName);
+                    table.PrimaryKey("PK_integrationProcesses", x => x.ProcessName);
                 });
 
             migrationBuilder.CreateTable(
-                name: "Users",
+                name: "users",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -40,11 +40,11 @@ namespace InterfazInAction.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.PrimaryKey("PK_users", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
-                name: "IntegrationFields",
+                name: "integrationFields",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -60,18 +60,18 @@ namespace InterfazInAction.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_IntegrationFields", x => x.Id);
+                    table.PrimaryKey("PK_integrationFields", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_IntegrationFields_IntegrationProcesses_ProcessName",
+                        name: "FK_integrationFields_integrationProcesses_ProcessName",
                         column: x => x.ProcessName,
-                        principalTable: "IntegrationProcesses",
+                        principalTable: "integrationProcesses",
                         principalColumn: "ProcessName",
                         onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_IntegrationFields_ProcessName",
-                table: "IntegrationFields",
+                name: "IX_integrationFields_ProcessName",
+                table: "integrationFields",
                 column: "ProcessName");
         }
 
@@ -79,13 +79,13 @@ namespace InterfazInAction.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "IntegrationFields");
+                name: "integrationFields");
 
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "users");
 
             migrationBuilder.DropTable(
-                name: "IntegrationProcesses");
+                name: "integrationProcesses");
         }
     }
 }

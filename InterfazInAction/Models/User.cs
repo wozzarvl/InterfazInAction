@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace InterfazInAction.Models
 {
-    public class User
+    public class user
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]

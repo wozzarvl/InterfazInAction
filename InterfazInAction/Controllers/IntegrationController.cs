@@ -6,11 +6,11 @@ namespace InterfazInAction.Controllers
 {
     [ApiController]
     [Route("api/v1/[controller]")]
-    public class IntegrationController : ControllerBase
+    public class integrationController : ControllerBase
     {
         private readonly IDynamicXmlManager _xmlManager;
 
-        public IntegrationController(IDynamicXmlManager xmlManager)
+        public integrationController(IDynamicXmlManager xmlManager)
         {
             _xmlManager = xmlManager;
         }

@@ -22,7 +22,7 @@ namespace InterfazInAction.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("InterfazInAction.Models.IntegrationField", b =>
+            modelBuilder.Entity("InterfazInAction.Models.integrationField", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -67,10 +67,10 @@ namespace InterfazInAction.Migrations
 
                     b.HasIndex("ProcessName");
 
-                    b.ToTable("IntegrationFields");
+                    b.ToTable("integrationFields");
                 });
 
-            modelBuilder.Entity("InterfazInAction.Models.IntegrationProcess", b =>
+            modelBuilder.Entity("InterfazInAction.Models.integrationProcess", b =>
                 {
                     b.Property<string>("ProcessName")
                         .HasMaxLength(50)
@@ -93,10 +93,10 @@ namespace InterfazInAction.Migrations
 
                     b.HasKey("ProcessName");
 
-                    b.ToTable("IntegrationProcesses");
+                    b.ToTable("integrationProcesses");
                 });
 
-            modelBuilder.Entity("InterfazInAction.Models.User", b =>
+            modelBuilder.Entity("InterfazInAction.Models.user", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -126,12 +126,12 @@ namespace InterfazInAction.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("users");
                 });
 
-            modelBuilder.Entity("InterfazInAction.Models.IntegrationField", b =>
+            modelBuilder.Entity("InterfazInAction.Models.integrationField", b =>
                 {
-                    b.HasOne("InterfazInAction.Models.IntegrationProcess", "Process")
+                    b.HasOne("InterfazInAction.Models.integrationProcess", "Process")
                         .WithMany("Fields")
                         .HasForeignKey("ProcessName")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -140,7 +140,7 @@ namespace InterfazInAction.Migrations
                     b.Navigation("Process");
                 });
 
-            modelBuilder.Entity("InterfazInAction.Models.IntegrationProcess", b =>
+            modelBuilder.Entity("InterfazInAction.Models.integrationProcess", b =>
                 {
                     b.Navigation("Fields");
                 });

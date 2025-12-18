@@ -10,14 +10,14 @@ using System.Text;
 namespace InterfazInAction.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/v1/[controller]")]
     [Produces("application/json")]
-    public class AuthController : ControllerBase // Clase con Mayúscula inicial
+    public class authController : ControllerBase // Clase con Mayúscula inicial
     {
         private readonly ILoginManager _loginManager; // Ya no inyectamos IConfiguration aquí
 
         // Inyectamos el Manager
-        public AuthController(ILoginManager loginManager)
+        public authController(ILoginManager loginManager)
         {
             _loginManager = loginManager;
         }

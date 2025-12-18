@@ -20,7 +20,7 @@ namespace InterfazInAction.Data
             }
 
           
-            if (context.Users.Any())
+            if (context.users.Any())
             {
                 return;   // La DB ya tiene datos
             }
@@ -28,7 +28,7 @@ namespace InterfazInAction.Data
             Console.WriteLine("--> Sembrando base de datos con usuario Admin...");
 
             // Crear el usuario Administrador por defecto
-            var adminUser = new User
+            var adminUser = new user
             {
                 UserName = "admin",
                 // Importante: Usamos BCrypt para hashear la contraseña "l4l4In4ct10n"
@@ -38,7 +38,7 @@ namespace InterfazInAction.Data
                 CreatedAt = DateTime.UtcNow
             };
 
-            context.Users.Add(adminUser);
+            context.users.Add(adminUser);
 
 
             context.SaveChanges();

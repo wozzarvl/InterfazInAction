@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace InterfazInAction.Models
 {
-    public class IntegrationProcess
+    public class integrationProcess
     {
         [Key]
         [MaxLength(50)]
@@ -22,10 +22,10 @@ namespace InterfazInAction.Models
         public string XmlIterator { get; set; } // XPath para iterar (Ej: "//*[local-name()='DT_MaterialesDetalleSAP']")
 
         // Relación con los campos
-        public List<IntegrationField> Fields { get; set; }
+        public List<integrationField> Fields { get; set; }
     }
     // TABLA DETALLE: Define el mapeo campo a campo
-    public class IntegrationField
+    public class integrationField
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
@@ -55,6 +55,6 @@ namespace InterfazInAction.Models
         public bool IsKey { get; set; } = false; 
        
         [ForeignKey("ProcessName")]
-        public IntegrationProcess Process { get; set; }
+        public integrationProcess Process { get; set; }
     }
 }
