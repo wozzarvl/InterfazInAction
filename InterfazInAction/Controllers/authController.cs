@@ -44,10 +44,10 @@ namespace InterfazInAction.Controllers
 
             if (resultado == null)
             {
-                return Unauthorized(new { message = "Credenciales inválidas" });
+                return Unauthorized(ApiResponse<AuthResponseModel>.Error("Credenciales Invalidas")); //Unauthorized(new { message = "Credenciales inválidas" });
             }
 
-            return Ok(resultado);
+            return Ok(ApiResponse<AuthResponseModel>.Ok(resultado));
         }
 
         [AllowAnonymous]

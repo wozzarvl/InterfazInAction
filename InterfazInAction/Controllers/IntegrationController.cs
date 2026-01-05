@@ -1,4 +1,5 @@
 ﻿using InterfazInAction.Manager;
+using InterfazInAction.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -38,22 +39,33 @@ namespace InterfazInAction.Controllers
          
                 int totalRows = await _xmlManager.ProcessXmlAsync(interfaceName, xmlContent);
 
-                return Ok(new
+                /* return Ok(new
+                 {
+                     status = "Success",
+                     interfaceName = interfaceName,
+                     totalRowsInserted = totalRows,
+                     timestamp = DateTime.UtcNow
+                 });*/
+
+                var resultData = new IntegrationResult
                 {
-                    status = "Success",
-                    interfaceName = interfaceName,
-                    totalRowsInserted = totalRows,
-                    timestamp = DateTime.UtcNow
-                });
+                    InterfaceName = interfaceName,
+                    TotalRowsInserted = totalRows,
+                    Timestamp = DateTime.UtcNow
+                };
+                return Ok(ApiResponse<IntegrationResult>.Ok(resultData));
+
             }
             catch (Exception ex)
             {
-                return BadRequest(new
-                {
-                    status = "Error",
-                    message = ex.Message,
-                    // innerException = ex.InnerException?.Message 
-                });
+                /* return BadRequest(new
+                 {
+                     status = "Error",
+                     message = ex.Message,
+                     // innerException = ex.InnerException?.Message 
+                 });*/
+
+                return BadRequest(ApiResponse<IntegrationResult>.Error(ex.Message));
             }
         }
     }

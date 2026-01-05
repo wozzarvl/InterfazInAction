@@ -62,8 +62,10 @@ namespace InterfazInAction.Manager
                             {
                                 var colNames = new List<string>();
                                 var paramNames = new List<string>();
-                                cmd.Parameters.Clear(); 
+                                cmd.Parameters.Clear();
 
+
+                                bool skipRow = false;
                                 // Mapeo de campos
                                 foreach (var field in processConfig.Fields)
                                 {
@@ -88,7 +90,14 @@ namespace InterfazInAction.Manager
                                         dbVal = ConvertValue(valStr, field.DataType);
                                     }
 
-                                    
+
+
+                                    if (field.IsKey && (dbVal == null || dbVal == DBNull.Value))
+                                    {
+                                        skipRow = true;
+                                        break; //El campo  es llave y/o importanrte y viene nulo se salta
+                                    }
+
                                     if (dbVal != null)
                                     {
                                         
@@ -117,7 +126,9 @@ namespace InterfazInAction.Manager
                                     }
                                 }
 
-                                
+                                // 3. Si falta alguna llave, saltamos al siguiente nodo sin hacer INSERT
+                                if (skipRow) continue;
+
                                 if (colNames.Count > 0)
                                 {
                                     //cmd.CommandText = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
@@ -180,15 +191,39 @@ namespace InterfazInAction.Manager
 
         private string GetValueFromXml(XElement parentNode, string path)
         {
+            /* if (parentNode == null || string.IsNullOrEmpty(path)) return null;
+             XElement current = parentNode;
+             var parts = path.Split('/');
+             foreach (var part in parts)
+             {
+                 if (current == null) return null;
+                 current = current.Elements().FirstOrDefault(e => e.Name.LocalName.Equals(part, StringComparison.OrdinalIgnoreCase));
+             }
+             return current?.Value;*/
             if (parentNode == null || string.IsNullOrEmpty(path)) return null;
+
             XElement current = parentNode;
             var parts = path.Split('/');
+
             foreach (var part in parts)
             {
                 if (current == null) return null;
+
+                // Permite subir al nodo padre ---
+                if (part == "..")
+                {
+                    current = current.Parent;
+                    continue; // Saltamos al siguiente ciclo
+                }
+                // ------------------------------------------------
+
+                
                 current = current.Elements().FirstOrDefault(e => e.Name.LocalName.Equals(part, StringComparison.OrdinalIgnoreCase));
             }
+
             return current?.Value;
+
+
         }
 
         private object ConvertValue(string val, string type)
