@@ -1,9 +1,10 @@
+using InterfazInAction.Data;
 using InterfazInAction.Manager;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using InterfazInAction.Data;
-using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
 
 
 
@@ -58,8 +59,14 @@ builder.Services.AddAuthentication(config => {
 
 builder.Services.AddScoped<ILoginManager, LoginManager>();
 builder.Services.AddScoped<IDynamicXmlManager, DynamicXmlManager>();
+builder.Services.AddScoped<InterfazInAction.Manager.IConfigurationManager, InterfazInAction.Manager.ConfigurationManager>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Esta línea corta el bucle infinito automáticamente
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

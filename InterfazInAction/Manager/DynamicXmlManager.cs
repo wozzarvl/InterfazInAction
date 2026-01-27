@@ -23,6 +23,7 @@ namespace InterfazInAction.Manager
             var configs = await _context.integrationProcesses
                 .Include(p => p.Fields)
                 .Where(p => p.InterfaceName == interfaceName)
+                .OrderBy(p => p.Order)
                 .ToListAsync();
 
             if (!configs.Any())
@@ -46,7 +47,7 @@ namespace InterfazInAction.Manager
                     try
                     {
                
-                        foreach (var processConfig in configs)
+                        foreach (var processConfig in configs.OrderBy(p=>p.Order))
                         {
                        
                             var nodes = xDoc.XPathSelectElements(processConfig.XmlIterator).ToList();
@@ -82,11 +83,60 @@ namespace InterfazInAction.Manager
                                     }
                                     else
                                     {
-                                        string valStr = GetValueFromXml(node, field.XmlPath);
+                                        /* string valStr = GetValueFromXml(node, field.XmlPath);
+                                         if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
+                                         {
+                                             valStr = field.DefaultValue;
+                                         }
+                                         dbVal = ConvertValue(valStr, field.DataType);
+                                        */
+
+                                        string valStr = null;
+
+                                        // Variables temporales para la lógica de extracción
+                                        string extractPath = field.XmlPath; // El path original
+                                        string mappingRule = null;          // La regla después del pipe |
+
+                                        // 1. DETECTAR REGLA DE MAPEO (Busca el pipe separador)
+                                        if (!string.IsNullOrEmpty(extractPath) && extractPath.Contains("|"))
+                                        {
+                                            var parts = extractPath.Split('|', 2); // Divide en 2 partes máximo
+                                            extractPath = parts[0].Trim();
+                                            mappingRule = parts[1].Trim();
+                                        }
+
+                                        // 2. EXTRACCIÓN (Usando el path limpio sin la regla)
+                                        if (!string.IsNullOrEmpty(extractPath))
+                                        {
+                                            // Soporte para plantillas {} vs Path normal
+                                            if (extractPath.Contains("{") && extractPath.Contains("}"))
+                                            {
+                                                valStr = ResolveTemplate(node, extractPath);
+                                            }
+                                            else
+                                            {
+                                                valStr = GetValueFromXml(node, extractPath);
+                                            }
+                                        }
+
+                                        // 3. TRANSFORMACIÓN (Si existía una regla)
+                                        if (!string.IsNullOrEmpty(mappingRule))
+                                        {
+                                            valStr = ApplyValueMapping(valStr, mappingRule);
+                                            // Si el resultado de la regla contiene llaves, volvemos a llamar al template resolver
+                                            if (!string.IsNullOrEmpty(valStr) && valStr.Contains("{") && valStr.Contains("}"))
+                                            {
+                                                valStr = ResolveTemplate(node, valStr);
+                                            }
+                                        }
+
+                                        // 4. VALOR POR DEFECTO (Si después de todo sigue vacío)
                                         if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
                                         {
                                             valStr = field.DefaultValue;
                                         }
+
+                                        // 5. CONVERSIÓN FINAL DE TIPO
                                         dbVal = ConvertValue(valStr, field.DataType);
                                     }
 
@@ -123,6 +173,7 @@ namespace InterfazInAction.Manager
                                         string pName = $"@p{paramNames.Count}";
                                         paramNames.Add(pName);
                                         cmd.Parameters.AddWithValue(pName, dbVal);
+                                        Console.WriteLine($"CAMPOS {field.DbColumn} ** {dbVal}");
                                     }
                                 }
 
@@ -226,6 +277,78 @@ namespace InterfazInAction.Manager
 
         }
 
+        // Método para CONCATENAR Valores del xml
+        private string ResolveTemplate(XElement node, string template)
+        {
+            var result = template;
+
+            // Buscamos todas las ocurrencias de texto dentro de llaves { }
+            // Usamos un loop simple para no depender de Regex si no quieres, 
+            // pero funciona buscando el patrón
+            int startIdx = result.IndexOf('{');
+            while (startIdx >= 0)
+            {
+                int endIdx = result.IndexOf('}', startIdx);
+                if (endIdx > startIdx)
+                {
+                    // Extraemos el nombre del campo, ej: "NAME1"
+                    string pathKey = result.Substring(startIdx + 1, endIdx - startIdx - 1);
+
+                    // Obtenemos el valor usando tu método existente
+                    string val = GetValueFromXml(node, pathKey) ?? "";
+
+                    // Reemplazamos "{NAME1}" por el valor real
+                    // Nota: Reemplazamos solo la primera ocurrencia para mantener el loop seguro
+                    string placeholder = "{" + pathKey + "}";
+                    result = result.Replace(placeholder, val);
+
+                    // Buscamos la siguiente llave
+                    startIdx = result.IndexOf('{');
+                }
+                else
+                {
+                    break; // No hay cierre de llave
+                }
+            }
+            return result;
+        }
+
+
+
+        // Método para  Poner  valor con una condicionante del xml  valor
+        private string ApplyValueMapping(string rawValue, string mappingRule)
+        {
+            // Limpiamos el valor de entrada (nulos son vacíos)
+            string currentVal = rawValue?.Trim() ?? "";
+
+            // Separamos las reglas por punto y coma
+            var rules = mappingRule.Split(';');
+
+            foreach (var rule in rules)
+            {
+                var parts = rule.Split(':');
+                if (parts.Length != 2) continue;
+
+                string sourceCriteria = parts[0].Trim();
+                string targetValue = parts[1].Trim();
+
+                // 1. Chequeo de comodín global (*)
+                if (sourceCriteria == "*")
+                {
+                    return targetValue;
+                }
+
+                // 2. Comparación exacta (Case insensitive para mayor seguridad)
+                if (string.Equals(currentVal, sourceCriteria, StringComparison.OrdinalIgnoreCase))
+                {
+                    return targetValue;
+                }
+            }
+
+            // Si ninguna regla coincide y no hubo comodín *, devolvemos el valor original
+            return currentVal;
+        }
+
         private object ConvertValue(string val, string type)
         {
             if (string.IsNullOrWhiteSpace(val)) return DBNull.Value;
@@ -234,9 +357,9 @@ namespace InterfazInAction.Manager
             {
                 return type.ToLower() switch
                 {
-                    "int" => int.Parse(val),
-                    "decimal" => decimal.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
-                    "float" => float.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
+                    "int" => int.TryParse(val, out int intResult) ? intResult : 0, //int.Parse(val),
+                    "decimal" => decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal decResult) ? decResult : 0m, //decimal.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
+                    "float" => float.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out float floatResult) ? floatResult : 0f,//float.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
                     "boolean" => (val == "1" || val.ToUpper() == "TRUE" || val.ToUpper() == "X"),
                     "datetime" => DateTime.Parse(val),
                     _ => val

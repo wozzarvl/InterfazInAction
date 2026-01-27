@@ -21,6 +21,8 @@ namespace InterfazInAction.Models
         [MaxLength(200)]
         public string XmlIterator { get; set; } // XPath para iterar (Ej: "//*[local-name()='DT_MaterialesDetalleSAP']")
 
+        [Required]
+        public int Order { get; set; }
         // Relación con los campos
         public List<integrationField> Fields { get; set; }
     }
