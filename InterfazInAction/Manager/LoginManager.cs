@@ -15,7 +15,7 @@ namespace InterfazInAction.Manager
         private readonly AppDbContext _context; 
 
         
-        private static List<RefreshToken> UserRefreshTokens = new List<RefreshToken>();
+        //private static List<RefreshToken> UserRefreshTokens = new List<RefreshToken>();
 
         public LoginManager(IConfiguration configuration, AppDbContext context)
         {
@@ -56,54 +56,68 @@ namespace InterfazInAction.Manager
 
             
             var jwtToken = GenerateAccessToken(claims, minutos);
-            var refreshToken = GenerateRefreshTokenString();
+            var refreshTokenStr = GenerateRefreshTokenString();
 
             // 6. Guardar Refresh Token (En memoria por ahora, pendiente mover a tabla DB)
             var refreshTokenEntity = new RefreshToken
             {
-                Token = refreshToken,
+                Token = refreshTokenStr,
                 Usuario = user.UserName,
-                Expires = DateTime.Now.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"]))
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"])),
+                Created = DateTime.UtcNow
             };
-            UserRefreshTokens.Add(refreshTokenEntity);
+
+            _context.RefreshTokens.Add(refreshTokenEntity);
+            _context.SaveChanges(); // Guardamos en Postgres
 
             return new AuthResponseModel
             {
                 AccessToken = new JwtSecurityTokenHandler().WriteToken(jwtToken),
-                RefreshToken = refreshToken,
+                RefreshToken = refreshTokenStr,
                 Expiration = jwtToken.ValidTo.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
             };
         }
 
         public AuthResponseModel RefreshToken(AuthResponseModel request)
         {
-            // Lógica de Refresh Token (Sigue usando la lista en memoria por ahora)
-            var storedToken = UserRefreshTokens.FirstOrDefault(x => x.Token == request.RefreshToken);
+            
+            var storedToken = _context.RefreshTokens
+                .FirstOrDefault(x => x.Token == request.RefreshToken);
 
-            if (storedToken == null || storedToken.Expires < DateTime.Now || storedToken.Revoked != null)
+            
+            if (storedToken == null || storedToken.Expires < DateTime.UtcNow || storedToken.Revoked != null)
                 return null;
 
-            storedToken.Revoked = DateTime.Now;
+            // 4. REVOCAR EL TOKEN ANTERIOR 
+            storedToken.Revoked = DateTime.UtcNow;
+            _context.RefreshTokens.Update(storedToken);
+            _context.SaveChanges();
 
+            
             var newClaims = new[] {
                 new Claim(JwtRegisteredClaimNames.Sub, storedToken.Usuario),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
             var newJwt = GenerateAccessToken(newClaims, 0);
-            var newRefresh = GenerateRefreshTokenString();
+            var newRefreshStr = GenerateRefreshTokenString();
 
-            UserRefreshTokens.Add(new RefreshToken
+         
+            var newTokenEntity = new RefreshToken
             {
-                Token = newRefresh,
+                Token = newRefreshStr,
                 Usuario = storedToken.Usuario,
-                Expires = DateTime.Now.AddDays(7)
-            });
+                Expires = DateTime.UtcNow.AddDays(Convert.ToDouble(_configuration["JwtSettings:RefreshTokenDurationInDays"])), // Usar config
+                Created = DateTime.UtcNow
+            };
+
+            _context.RefreshTokens.Add(newTokenEntity);
+            _context.SaveChanges();
 
             return new AuthResponseModel
             {
                 AccessToken = new JwtSecurityTokenHandler().WriteToken(newJwt),
-                RefreshToken = newRefresh,
+                RefreshToken = newRefreshStr,
                 Expiration = newJwt.ValidTo.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")
             };
         }

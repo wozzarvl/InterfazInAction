@@ -91,7 +91,7 @@ namespace InterfazInAction.Controllers
         [HttpGet("prueba")]
         public IActionResult prueba()
         {
-            return Ok();
+            return Ok(ApiResponse<string>.Ok($"Prueba Exitosa {DateTime.Now}"));
         }
     }
 }

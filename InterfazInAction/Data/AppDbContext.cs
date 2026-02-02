@@ -12,7 +12,8 @@ namespace InterfazInAction.Data
        
         public DbSet<user> users { get; set; }
 
-      
+        public DbSet<RefreshToken> RefreshTokens { get; set; }
+
         public DbSet<integrationProcess> integrationProcesses { get; set; }
         public DbSet<integrationField> integrationFields { get; set; }
     }

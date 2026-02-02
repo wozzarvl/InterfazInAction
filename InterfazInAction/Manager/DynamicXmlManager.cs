@@ -357,9 +357,9 @@ namespace InterfazInAction.Manager
             {
                 return type.ToLower() switch
                 {
-                    "int" => int.TryParse(val, out int intResult) ? intResult : 0, //int.Parse(val),
-                    "decimal" => decimal.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal decResult) ? decResult : 0m, //decimal.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
-                    "float" => float.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out float floatResult) ? floatResult : 0f,//float.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
+                    "int" => int.Parse(val),
+                    "decimal" => decimal.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
+                    "float" => float.Parse(val, System.Globalization.CultureInfo.InvariantCulture),
                     "boolean" => (val == "1" || val.ToUpper() == "TRUE" || val.ToUpper() == "X"),
                     "datetime" => DateTime.Parse(val),
                     _ => val
