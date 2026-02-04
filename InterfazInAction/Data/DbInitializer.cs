@@ -59,13 +59,14 @@ namespace InterfazInAction.Data
         {
             var procesos = new integrationProcess[]
             {
-                new integrationProcess 
-                { 
+                new integrationProcess
+                {
                     ProcessName= "SAP_MATERIAL_ITEM",
                     InterfaceName="MMI019",
                     TargetTable="erp.item",
                     XmlIterator= "//*[local-name()='DT_MaterialesDetalleSAP']",
-                    Fields =new List<integrationField> 
+                    Order=1,
+                    Fields =new List<integrationField>
                     {
                         new integrationField { ProcessName="SAP_MATERIAL_ITEM",XmlPath="MATNR", DbColumn="code",DataType="string",IsKey=true},
                         new integrationField { ProcessName="SAP_MATERIAL_ITEM",XmlPath="MAKTX",DbColumn="description",DataType="string"},
@@ -80,11 +81,12 @@ namespace InterfazInAction.Data
                     }
                 },
                 new integrationProcess
-                {   
+                {
                     ProcessName= "SAP_MATERIAL_SKU",
                     InterfaceName="MMI019",
                     TargetTable="erp.sku",
                     XmlIterator= "//*[local-name()='DT_MaterialesDetalleSAP']",
+                    Order=2,
                     Fields  = new List<integrationField>
                     {
                         new integrationField { ProcessName="SAP_MATERIAL_SKU",XmlPath="EAN11",DbColumn="barcode",DataType="string",IsKey=true},
@@ -103,6 +105,7 @@ namespace InterfazInAction.Data
                     InterfaceName="MMI019",
                     TargetTable="erp.sku",
                     XmlIterator= "//*[local-name()='DT_UM']",
+                    Order=3,
                     Fields  = new List<integrationField>
                     {
                         new integrationField { ProcessName="SAP_MATERIAL_SKU",XmlPath="EAN11",DbColumn="barcode",DataType="string",IsKey=true},
@@ -113,6 +116,77 @@ namespace InterfazInAction.Data
                         new integrationField { ProcessName="SAP_MATERIAL_SKU",DbColumn="created_at",DataType="CURRENT_TIMESTAMP" },
                         new integrationField { ProcessName="SAP_MATERIAL_SKU",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP" },
 
+                    }
+                },
+                new integrationProcess
+                {
+                    ProcessName="SDI003_PARTNER_HEAD",
+                    InterfaceName="SDI003",
+                    TargetTable="erp.partner",
+                    XmlIterator="//*[local-name()='DT_ClientesDetalleSAP' and *[local-name()='KTOKD']='0002']",
+                    Order=1,
+                    Fields = new List<integrationField> 
+                    {
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",XmlPath="KUNNR",DbColumn="code",DataType="string",IsKey=true},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",XmlPath="STCD1",DbColumn="rfc",DataType="string"},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",DbColumn="type",DataType="string",DefaultValue="Cliente"},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",DbColumn="created_at",DataType="CURRENT_TIMESTAMP"},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP"},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",XmlPath="{NAME1} {NAME4}",DbColumn="name",DataType="string"},
+                        new integrationField {ProcessName="SDI003_PARTNER_HEAD",DbColumn="society_type",DataType="string",DefaultValue="cliente"}
+                    }
+                },
+                new integrationProcess
+                {
+                    ProcessName="SDI003_ADDR_MAIN",
+                    InterfaceName="SDI003",
+                    TargetTable="erp.partner_addresses",
+                    XmlIterator="//*[local-name()='DT_ClientesDetalleSAP' and *[local-name()='KTOKD']='0002']",
+                    Order=2,
+                    Fields = new List<integrationField>
+                    {
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="SUC_CLAVE | :{KUNNR}; *:{SUC_CLAVE}",DbColumn="code",DataType="string",IsKey=true},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="KUNNR",DbColumn="partner_code",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="int"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="DISTRIB_SUBCHAN",DbColumn="distribution channel",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="LOEVM | X:true; *:false",DbColumn="active",DataType="boolean"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",DbColumn="created_at",DataType="CURRENT_TIMESTAMP"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="POST_CODE1",DbColumn="postal_code",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="BEZEI",DbColumn="state",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="STREET",DbColumn="street",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="CLI_AREACONTROL",DbColumn="super_distribution_channel",DataType="string"}
+
+
+                    }
+                    
+                },
+                new integrationProcess
+                {
+                    ProcessName="SDI003_ADDR_BRANCH",
+                    InterfaceName="SDI003",
+                    TargetTable="erp.partner_addresses",
+                    XmlIterator="//*[local-name()='DT_ClientesDetalleSAP' and *[local-name()='KTOKD']='0018']",
+                    Order=3,
+                    Fields = new List<integrationField>
+                    {
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="SUC_CLAVE",DbColumn="code",DataType="string",IsKey=true},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="KUNNR",DbColumn="partner_code",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",DbColumn="created_at",DataType="CURRENT_TIMESTAMP"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="POST_CODE1",DbColumn="postal_code",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="BEZEI",DbColumn="state",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="STREET",DbColumn="street",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string" },
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="CLI_AREACONTROL",DbColumn="super_distribution_channel",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="DISTRIB_SUBCHAN",DbColumn="distribution channel",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
                     }
                 }
             };
