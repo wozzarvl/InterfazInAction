@@ -64,7 +64,7 @@ namespace InterfazInAction.Controllers
                 return BadRequest(new { message = "Token inválido o expirado" });
             }
 
-            return Ok(resultado);
+            return Ok(ApiResponse<AuthResponseModel>.Ok(resultado));
         }
 
 
