@@ -23,7 +23,24 @@ namespace InterfazInAction.Models
 
         [Required]
         public int Order { get; set; }
+
+        
+        public string? XmlTemplate { get; set; }
+
+        
+        [MaxLength(100)]
+        public string? BodyNodeName { get; set; }
         // Relación con los campos
+
+        // Tabla de donde salen las líneas (Ej: "erp.incoming_goods_line")
+        [MaxLength(100)]
+        public string? DetailTable { get; set; }
+
+        // Nodo XML que envuelve a CADA item del detalle (Ej: "Item" o "Line")
+        // NOTA: Si el XML es plano en el detalle (lista directa), este será el nombre del nodo repetitivo.
+        [MaxLength(100)]
+        public string? DetailNodeName { get; set; }
+
         public List<integrationField> Fields { get; set; }
     }
     // TABLA DETALLE: Define el mapeo campo a campo

@@ -1,6 +1,8 @@
 ﻿using InterfazInAction.Data;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Data;
+using System.Diagnostics;
 using System.Xml.Linq;
 using System.Xml.XPath;
 
@@ -68,7 +70,7 @@ namespace InterfazInAction.Manager
 
                                 bool skipRow = false;
                                 // Mapeo de campos
-                                foreach (var field in processConfig.Fields)
+                                foreach (var field in processConfig.Fields.OrderBy(x=>x.Id))
                                 {
                                     object dbVal = null;
 
@@ -164,6 +166,7 @@ namespace InterfazInAction.Manager
                                                 depCmd.Parameters.AddWithValue("@valRef", dbVal);
                                                 depCmd.Parameters.AddWithValue("@valcreated_at", DateTime.Now);
                                                 depCmd.Parameters.AddWithValue("@valupdated_at", DateTime.Now);
+                                                Console.WriteLine(depSql);
                                                 await depCmd.ExecuteNonQueryAsync();
                                             }
                                         }
@@ -218,6 +221,7 @@ namespace InterfazInAction.Manager
                                         }
                                     }
                                     cmd.CommandText = sql;
+                                    Console.WriteLine(sql);
                                     await cmd.ExecuteNonQueryAsync();
                                     totalInserted++;
                                 }
@@ -369,6 +373,242 @@ namespace InterfazInAction.Manager
             {
                 return DBNull.Value;
             }
+        }
+
+        public async Task<DataTable> GetDataForOutboundAsync(string tableName, List<int> ids)
+        {
+            var dataTable = new DataTable();
+            var connectionString = _configuration.GetConnectionString("WmsConnection");
+
+            using (var conn = new NpgsqlConnection(connectionString))
+            {
+                await conn.OpenAsync();
+
+                // IMPORTANTE: Asumimos que la columna llave se llama "Id" o "id".
+                // Si tus tablas tienen llaves diferentes (ej: order_id), 
+                // tendríamos que agregar un campo 'PrimaryKeyColumn' a la tabla integrationProcess.
+                // Por ahora, usaremos el estándar "Id".
+
+                string sql = $"SELECT * FROM {tableName} WHERE \"id\" = ANY(@ids)";
+
+                using (var cmd = new NpgsqlCommand(sql, conn))
+                {
+                    // Npgsql soporta pasar listas/arrays directamente al parámetro ANY(@ids)
+                    cmd.Parameters.AddWithValue("ids", ids.ToArray());
+
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        dataTable.Load(reader);
+                    }
+                }
+            }
+
+            return dataTable;
+        }
+
+        public async Task<Dictionary<int, string>> CreateOutboundXmlsAsync(string interfaceName, List<int> recordIds)
+        {
+            var result = new Dictionary<int, string>();
+
+            // 1. Configuración
+            var config = await _context.integrationProcesses
+                .Include(p => p.Fields)
+                .FirstOrDefaultAsync(p => p.InterfaceName == interfaceName);
+
+            if (config == null || string.IsNullOrEmpty(config.XmlTemplate))
+                throw new Exception($"Configuración incompleta para '{interfaceName}'.");
+
+            // 2. Obtener Headers (Tabla Principal)
+            var dtHeader = await GetDataForOutboundAsync(config.TargetTable, recordIds);
+
+            // 3. Obtener Lines (Tabla Detalle) - Si está configurada
+            DataTable dtLines = null;
+            string fkColumnName = "";
+
+            if (!string.IsNullOrEmpty(config.DetailTable))
+            {
+                // Asumimos convención: La FK en la tabla hija se llama igual que la tabla padre + "_id" 
+                // O mejor: Usamos una convención simple "incoming_goods_id" si la tabla es "incoming_goods"
+                // Para hacerlo genérico rápido, asumiremos que la columna FK se llama "incoming_goods_id" 
+                // (basado en el nombre de la tabla target: erp.incoming_goods -> incoming_goods_id)
+
+              fkColumnName = config.TargetTable.Split('.').Last() + "_id";
+                dtLines = await GetDataForLinesAsync(config.DetailTable, fkColumnName, recordIds);
+            }
+
+            // 4. Procesar
+            foreach (DataRow headerRow in dtHeader.Rows)
+            {
+                int recordId = Convert.ToInt32(headerRow["Id"]);
+                string currentXml = config.XmlTemplate;
+
+                // Filtrar las líneas de este registro específico
+                //DataRow[] currentLines = dtLines?.Select($"{dtLines.Columns[1].ColumnName} = {recordId}") ?? new DataRow[0];
+                DataRow[] currentLines = new DataRow[0];
+
+                if (dtLines != null && !string.IsNullOrEmpty(fkColumnName))
+                {
+                    // El filtro busca filas donde la columna FK coincida con el ID del padre
+                    currentLines = dtLines.Select($"{fkColumnName} = {recordId}");
+                }
+                // Contexto para Header: Usamos el Header Row, pero si falta dato, usamos la Primera Línea
+                // Esto soluciona tu problema de que WERKS está en las líneas.
+                DataRow contextRowForHeader = headerRow;
+                DataRow fallbackRow = currentLines.Length > 0 ? currentLines[0] : null;
+
+                // A. REEMPLAZO DE VARIABLES DEL TEMPLATE (Header/Metadata)
+                var templateFields = config.Fields.Where(f => f.XmlPath.StartsWith("{"));
+                foreach (var field in templateFields)
+                {
+                    string val = GetValueFromRows(field.DbColumn, contextRowForHeader, fallbackRow);
+                    currentXml = currentXml.Replace(field.XmlPath, val);
+                }
+
+                // B. PARSEO DEL DOM
+                XDocument xDoc = XDocument.Parse(currentXml);
+
+                // C. LLENADO DE ENCABEZADO (BodyNodeName)
+                if (!string.IsNullOrEmpty(config.BodyNodeName))
+                {
+                    var headerNode = xDoc.Descendants().FirstOrDefault(x => x.Name.LocalName == config.BodyNodeName);
+                    if (headerNode != null)
+                    {
+                        // Campos que NO son template y NO tienen ReferenceTable (asumimos que ReferenceTable marca los detalles)
+                        var headerBodyFields = config.Fields.Where(f => !f.XmlPath.StartsWith("{") && string.IsNullOrEmpty(f.ReferenceTable));
+
+                        foreach (var field in headerBodyFields)
+                        {
+                            // AQUÍ ESTÁ EL TRUCO: Buscamos en Header, si no está, buscamos en la primera línea
+                            string val = GetValueFromRows(field.DbColumn, contextRowForHeader, fallbackRow);
+                            AddChildElement(headerNode, field.XmlPath, val);
+                        }
+                    }
+                }
+
+                // D. LLENADO DE DETALLE (DetailNodeName)
+                if (!string.IsNullOrEmpty(config.DetailNodeName) && currentLines.Any())
+                {
+                    // Buscamos el nodo PADRE donde se insertarán los items del detalle.
+                    // En SAP, suele ser que DT_MovInvDetalleSAP es una lista de items, 
+                    // o que dentro de DT_MovInvDetalleSAP van muchos nodos 'Item'.
+                    // Asumiremos que el nodo en el XML Template (ej: <DT_MovInvDetalleSAP />) es el CONTENEDOR.
+
+                    // Campos marcados para detalle (usaremos ReferenceTable = 'Detail' o el nombre de la tabla detalle)
+                    var lineFields = config.Fields.Where(f => !string.IsNullOrEmpty(f.ReferenceTable));
+
+                    // Buscamos el contenedor en el XML (ej: DT_MovInvDetalleSAP)
+                    // OJO: En tu XML ejemplo, DT_MovInvDetalleSAP parece ser el nodo repetitivo? 
+                    // Usualmente en SAP: <Padre><Lineas><Item>...</Item><Item>...</Item></Lineas></Padre>
+                    // Si tu XML espera: <DT_MovInvDetalleSAP><Campo>...</Campo></DT_MovInvDetalleSAP> repetido N veces,
+                    // entonces necesitamos encontrar al PADRE del nodo detalle.
+
+                    // Para simplificar: Buscamos el nodo raíz o el padre lógico y añadimos nodos hermanos.
+                    // Pero según tu estructura, DT_MovInvDetalleSAP parece ser hermano de DT_MovInvEncabezadoSAP.
+
+                    // ESTRATEGIA: Buscamos el nodo <DT_MovInvDetalleSAP> en el template.
+                    // Si existe, lo usaremos como "Plantilla de Item" o como "Contenedor".
+                    // Si el XML requiere repetir el nodo <DT_MovInvDetalleSAP> por cada línea:
+                    var containerNode = xDoc.Root; // Insertamos directo en la raíz (MT_MovInventarioSAP)
+
+                    foreach (var lineRow in currentLines)
+                    {
+                        // Creamos un NUEVO nodo por cada línea
+                        XElement lineNode = new XElement(XName.Get(config.DetailNodeName, xDoc.Root.Name.NamespaceName));
+
+                        foreach (var field in lineFields)
+                        {
+                            string val = GetValueFromRows(field.DbColumn, lineRow, null); // Solo buscamos en la línea
+                            AddChildElement(lineNode, field.XmlPath, val);
+                        }
+
+                        // Lo agregamos al documento (al final, después del encabezado)
+                        xDoc.Root.Add(lineNode);
+                    }
+                }
+
+                result.Add(recordId, xDoc.ToString());
+            }
+
+            return result;
+        }
+
+        // Helper para buscar valor en Header O en Línea
+        private string GetValueFromRows(string colName, DataRow mainRow, DataRow? fallbackRow)
+        {
+            if (colName.StartsWith("GENERATE_"))
+            {
+                if (colName == "GENERATE_GUID") return Guid.NewGuid().ToString("N");
+                if (colName == "GENERATE_QUICK_ID") return $"924-{DateTime.Now:yyyyMMddHHmmssfff}";
+                return "";
+            }
+
+            // 1. Buscar en Tabla Principal
+            if (mainRow.Table.Columns.Contains(colName))
+            {
+                var val = mainRow[colName];
+                if (val != DBNull.Value) return ConvertToString(val);
+            }
+
+            // 2. Si no está o es nulo, buscar en Tabla Secundaria (Fallback)
+            if (fallbackRow != null && fallbackRow.Table.Columns.Contains(colName))
+            {
+                var val = fallbackRow[colName];
+                if (val != DBNull.Value) return ConvertToString(val);
+            }
+
+            return ""; // O valor por defecto del campo si lo pasáramos
+        }
+
+        private string ConvertToString(object val)
+        {
+            if (val is DateTime d) return d.ToString("yyyy-MM-dd"); // Formato SAP estándar
+            return val.ToString();
+        }
+
+        // Nuevo Helper para traer las líneas
+        private async Task<DataTable> GetDataForLinesAsync(string tableName, string fkColName, List<int> parentIds)
+        {
+            var dt = new DataTable();
+            // Nota: fkColName debe ser seguro (sin inyección). Como viene de config interna, se asume seguro.
+            string sql = $"SELECT * FROM {tableName} WHERE \"{fkColName}\" = ANY(@ids)";
+
+            using (var conn = new NpgsqlConnection(_configuration.GetConnectionString("WmsConnection")))
+            {
+                await conn.OpenAsync();
+                using (var cmd = new NpgsqlCommand(sql, conn))
+                {
+                    cmd.Parameters.AddWithValue("ids", parentIds.ToArray());
+                    using (var reader = await cmd.ExecuteReaderAsync()) dt.Load(reader);
+                }
+            }
+            return dt;
+        }
+
+        // HELPER: Crea nodos hijos recursivamente (Ej: "Header/Date")
+        private void AddChildElement(XElement parent, string path, string value)
+        {
+            var parts = path.Split('/');
+            XElement current = parent;
+
+            foreach (var part in parts)
+            {
+                // Buscamos si ya existe el nodo hijo (ignorando namespace para facilitar)
+                XElement next = current.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName.Equals(part, StringComparison.OrdinalIgnoreCase));
+
+                if (next == null)
+                {
+                    // Creamos el nodo. 
+                    // IMPORTANTE: Al crearlo sin namespace, heredará el del padre o quedará vacío.
+                    // Si SAP es estricto con namespaces en hijos, tal vez necesitemos tomar el namespace del padre.
+                    // Por ahora, lo creamos simple:
+                    next = new XElement(current.Name.Namespace + part);
+                    current.Add(next);
+                }
+                current = next;
+            }
+            // Asignar valor al nodo hoja
+            current.Value = value;
         }
     }
 }

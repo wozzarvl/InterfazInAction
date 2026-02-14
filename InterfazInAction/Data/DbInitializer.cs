@@ -147,18 +147,17 @@ namespace InterfazInAction.Data
                     {
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="SUC_CLAVE | :{KUNNR}; *:{SUC_CLAVE}",DbColumn="code",DataType="string",IsKey=true},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="KUNNR",DbColumn="partner_code",DataType="string"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="int"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="DISTRIB_SUBCHAN",DbColumn="distribution channel",DataType="string"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="int"},                         
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="LOEVM | X:true; *:false",DbColumn="active",DataType="boolean"},
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",DbColumn="created_at",DataType="CURRENT_TIMESTAMP"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="POST_CODE1",DbColumn="postal_code",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="BEZEI",DbColumn="state",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="STREET",DbColumn="street",DataType="string"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="CLI_AREACONTROL",DbColumn="super_distribution_channel",DataType="string"}
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string"}
+                         
 
 
                     }
@@ -183,10 +182,33 @@ namespace InterfazInAction.Data
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="STREET",DbColumn="street",DataType="string"},
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string" },
-                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},
-                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="CLI_AREACONTROL",DbColumn="super_distribution_channel",DataType="string"},
-                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="DISTRIB_SUBCHAN",DbColumn="distribution channel",DataType="string"},
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},                        
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
+                    }
+                },
+                new integrationProcess
+                {
+                    ProcessName="MMI014_OUTBOUND",
+                    InterfaceName="MMI014",
+                    TargetTable="erp.goods_adjustment",
+                    XmlIterator="N/A",
+                    Order=1,
+                    BodyNodeName="DT_MovInvEncabezadoSAP",
+                    XmlTemplate="<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n    <n0:MT_MovInventarioSAP xmlns:n0=\"http://grupolala.com/sicavcedis/ventas/MM-I-014\">\r\n        <DT_ControlData>\r\n            <QUICK_ID>{QUICK_ID}</QUICK_ID>\r\n            <INTERFACE_NAME>{INTERFACE_NAME}</INTERFACE_NAME>\r\n            <LOG_ID>{LOG_ID}</LOG_ID>\r\n            <SOURCE_SYSTEM>ED0</SOURCE_SYSTEM>\r\n        </DT_ControlData>\r\n        <DT_MasterData>\r\n            <CENTRO>{CENTRO}</CENTRO>\r\n        </DT_MasterData>\r\n        <DT_MovInvEncabezadoSAP>\r\n             </DT_MovInvEncabezadoSAP>\r\n    </n0:MT_MovInventarioSAP>",
+                    DetailNodeName="DT_MovInvDetalleSAP",
+                    DetailTable="erp.goods_adjustment_line",
+                    Fields = new List<integrationField>
+                    {
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{QUICK_ID}",DbColumn="GENERATE_QUICK_ID",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{LOG_ID}",DbColumn="GENERATE_GUID",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{CENTRO}",DbColumn="cedis_code",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{INTERFACE_NAME}",DbColumn="module",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="BLDAT",DbColumn="created_at",DataType="datetime"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="WERKS",DbColumn="cedis_code",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="CONCEPTO",DbColumn="N/A",DataType="string",DefaultValue="IE"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="REFERENCIA",DbColumn="erp_reference",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="MATNR",DbColumn="item_code",DataType="string",ReferenceTable="Detail"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="ERFMG",DbColumn="quantity",DataType="decimal",ReferenceTable="Detail"}
                     }
                 }
             };
