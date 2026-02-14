@@ -155,11 +155,24 @@ namespace InterfazInAction.Manager
                                         
                                         if (!string.IsNullOrEmpty(field.ReferenceTable) && !string.IsNullOrEmpty(field.ReferenceColumn))
                                         {
-                                            
+
+                                            var refParts = field.ReferenceColumn.Split('|');
+                                            string mainCol = refParts[0].Trim(); // Columna llave (para validación)
+                                            string extraCol = refParts.Length > 1 ? refParts[1].Trim() : null; // Columna extra (opcional)
+
+                                            string insertCols = $"\"{mainCol}\"";
+                                            string insertVals = "@valRef";
+
+                                            if (!string.IsNullOrEmpty(extraCol))
+                                            {
+                                                insertCols += $", \"{extraCol}\"";
+                                                insertVals += ", @valRef"; // Repetimos el valor para la segunda columna
+                                            }
+
                                             string depSql = $@"
-                                                INSERT INTO {field.ReferenceTable} (""{field.ReferenceColumn}"",created_at,updated_at) 
-                                                VALUES (@valRef,@valcreated_at,@valupdated_at) 
-                                                ON CONFLICT (""{field.ReferenceColumn}"") DO NOTHING";
+                                                            INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
+                                                            VALUES ({insertVals}, @valcreated_at, @valupdated_at) 
+                                                            ON CONFLICT (""{mainCol}"") DO NOTHING";
 
                                             using (var depCmd = new NpgsqlCommand(depSql, conn, transaction))
                                             {
