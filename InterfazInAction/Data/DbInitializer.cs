@@ -117,6 +117,30 @@ namespace InterfazInAction.Data
                         new integrationField { ProcessName="SAP_MATERIAL_SKU",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP" },
 
                     }
+                },new integrationProcess
+                {
+                    ProcessName="SAP_MATERIAL_FAMYLIN",
+                    InterfaceName="MMI019",
+                    TargetTable="erp.item_subgroup",
+                    XmlIterator="//*[local-name()='DT_MaterialesDetalleSAP']",
+                    Order=4,
+                    Fields = new List<integrationField>
+                    {
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="code",DataType="string",IsKey=true},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT6",DbColumn="name",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="line_code",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT5",DbColumn="line_name",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="brand_code",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT4",DbColumn="brand_name",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="super_brand_code",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT3",DbColumn="super_brand_name",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="family_code",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT2",DbColumn="family_name",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="PRDHA",DbColumn="super_family_code",DataType="string"},
+                        new integrationField {ProcessName="SAP_MATERIAL_FAMYLIN",XmlPath="VTEXT1",DbColumn="super_family_name",DataType="string"},
+
+
+                    }
                 },
                 new integrationProcess
                 {
@@ -125,7 +149,7 @@ namespace InterfazInAction.Data
                     TargetTable="erp.partner",
                     XmlIterator="//*[local-name()='DT_ClientesDetalleSAP' and *[local-name()='KTOKD']='0002']",
                     Order=1,
-                    Fields = new List<integrationField> 
+                    Fields = new List<integrationField>
                     {
                         new integrationField {ProcessName="SDI003_PARTNER_HEAD",XmlPath="KUNNR",DbColumn="code",DataType="string",IsKey=true},
                         new integrationField {ProcessName="SDI003_PARTNER_HEAD",XmlPath="STCD1",DbColumn="rfc",DataType="string"},
@@ -147,7 +171,7 @@ namespace InterfazInAction.Data
                     {
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="SUC_CLAVE | :{KUNNR}; *:{SUC_CLAVE}",DbColumn="code",DataType="string",IsKey=true},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="KUNNR",DbColumn="partner_code",DataType="string"},
-                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="int"},                         
+                         new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="HOUSE_NUM1",DbColumn="exterior_number",DataType="int"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",DbColumn="updated_at",DataType="CURRENT_TIMESTAMP"},
@@ -157,11 +181,11 @@ namespace InterfazInAction.Data
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="STREET",DbColumn="street",DataType="string"},
                          new integrationField {ProcessName="SDI003_ADDR_MAIN",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string"}
-                         
+
 
 
                     }
-                    
+
                 },
                 new integrationProcess
                 {
@@ -182,7 +206,7 @@ namespace InterfazInAction.Data
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="CITY2",DbColumn="neighborhood",DataType="string"},
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="STREET",DbColumn="street",DataType="string"},
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="{NAME1} {NAME4}",DbColumn="address_name",DataType="string" },
-                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},                        
+                        new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="LOEVM | X:false; *:true",DbColumn="active",DataType="boolean"},
                         new integrationField {ProcessName="SDI003_ADDR_BRANCH",XmlPath="../DT_MasterData/CENTRO",DbColumn="cedis_code",DataType="string"},
                     }
                 },

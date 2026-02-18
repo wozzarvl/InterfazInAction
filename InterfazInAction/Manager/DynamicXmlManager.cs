@@ -1,4 +1,5 @@
 ﻿using InterfazInAction.Data;
+using InterfazInAction.Models;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using System.Data;
@@ -17,6 +18,323 @@ namespace InterfazInAction.Manager
         {
             _context = context;
             _configuration = configuration;
+        }
+
+        public async Task<int> ProcessXmlAsyncNoUpsert(string interfaceName, string xmlContent)
+        {
+            // Cargar configuración de procesos
+            var configs = await _context.integrationProcesses
+                .Include(p => p.Fields)
+                .Where(p => p.InterfaceName == interfaceName)
+                .OrderBy(p => p.Order)
+                .ToListAsync();
+
+            if (!configs.Any())
+                throw new Exception($"No se encontraron procesos configurados para la interfaz '{interfaceName}'.");
+
+            var xDoc = XDocument.Parse(xmlContent);
+            int totalInserted = 0;
+
+            var connectionString = _configuration.GetConnectionString("WmsConnection");
+
+            using (var conn = new NpgsqlConnection(connectionString))
+            {
+                await conn.OpenAsync();
+
+                using (var transaction = await conn.BeginTransactionAsync())
+                {
+                    try
+                    {
+                        foreach (var processConfig in configs.OrderBy(p => p.Order))
+                        {
+                            var nodes = xDoc.XPathSelectElements(processConfig.XmlIterator).ToList();
+
+                            if (!nodes.Any()) continue;
+
+                            // Iteramos sobre cada nodo XML encontrado
+                            foreach (var node in nodes)
+                            {
+                                // Lista para almacenar temporalmente los campos y valores de ESTE registro
+                                var currentRecordValues = new List<(integrationField Field, object Value)>();
+
+                                bool skipRow = false;
+
+                                // --- 1. EXTRACCIÓN Y MAPEO DE VALORES ---
+                                foreach (var field in processConfig.Fields.OrderBy(x => x.Id))
+                                {
+                                    object dbVal = null;
+
+                                    if (field.DataType == "CURRENT_TIMESTAMP")
+                                    {
+                                        dbVal = DateTime.Now;
+                                    }
+                                    else if (string.IsNullOrEmpty(field.XmlPath))
+                                    {
+                                        dbVal = ConvertValue(field.DefaultValue, field.DataType);
+                                    }
+                                    else
+                                    {
+                                        string valStr = null;
+                                        string extractPath = field.XmlPath;
+                                        string mappingRule = null;
+
+                                        // 1. DETECTAR REGLA DE MAPEO
+                                        if (!string.IsNullOrEmpty(extractPath) && extractPath.Contains("|"))
+                                        {
+                                            var parts = extractPath.Split('|', 2);
+                                            extractPath = parts[0].Trim();
+                                            mappingRule = parts[1].Trim();
+                                        }
+
+                                        // 2. EXTRACCIÓN
+                                        if (!string.IsNullOrEmpty(extractPath))
+                                        {
+                                            if (extractPath.Contains("{") && extractPath.Contains("}"))
+                                            {
+                                                valStr = ResolveTemplate(node, extractPath);
+                                            }
+                                            else
+                                            {
+                                                valStr = GetValueFromXml(node, extractPath);
+                                            }
+                                        }
+
+                                        // 3. TRANSFORMACIÓN
+                                        if (!string.IsNullOrEmpty(mappingRule))
+                                        {
+                                            valStr = ApplyValueMapping(valStr, mappingRule);
+                                            if (!string.IsNullOrEmpty(valStr) && valStr.Contains("{") && valStr.Contains("}"))
+                                            {
+                                                valStr = ResolveTemplate(node, valStr);
+                                            }
+                                        }
+
+                                        // 4. VALOR POR DEFECTO
+                                        if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
+                                        {
+                                            valStr = field.DefaultValue;
+                                        }
+
+                                        // 5. CONVERSIÓN
+                                        dbVal = ConvertValue(valStr, field.DataType);
+                                    }
+
+                                    // Si es llave y viene nulo, saltamos el registro completo
+                                    if (field.IsKey && (dbVal == null || dbVal == DBNull.Value))
+                                    {
+                                        skipRow = true;
+                                        break;
+                                    }
+
+                                    if (dbVal != null)
+                                    {
+                                        // --- INSERCIÓN EN TABLAS REFERENCIADAS (DEPENDENCIAS) ---
+                                        if (!string.IsNullOrEmpty(field.ReferenceTable) && !string.IsNullOrEmpty(field.ReferenceColumn))
+                                        {
+                                            var refParts = field.ReferenceColumn.Split('|');
+                                            string mainCol = refParts[0].Trim();
+                                            string extraCol = refParts.Length > 1 ? refParts[1].Trim() : null;
+
+                                            string insertCols = $"{mainCol}";
+                                            string insertVals = "@valRef";
+
+                                            if (!string.IsNullOrEmpty(extraCol))
+                                            {
+                                                insertCols += $",{extraCol}";
+                                                insertVals += ",@WOLOLO";
+                                            }
+
+
+
+                                            // NOTA: Aquí se mantiene el ON CONFLICT DO NOTHING porque es tabla auxiliar
+                                            string depSql = $@"
+                                                            INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
+                                                            VALUES ({insertVals}, @valcreated_at, @valupdated_at)
+                                                            ON CONFLICT ({mainCol}) DO NOTHING";
+
+
+                                            if (field.ReferenceTable.Equals("erp.measure_unit") && dbVal.Equals("*CJ*"))
+                                            {
+                                                depSql = $@"
+                                                            INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
+                                                            VALUES ({insertVals}, @valcreated_at, @valupdated_at)";
+                                            }
+                                            using (var depCmd = new NpgsqlCommand(depSql, conn, transaction))
+                                            {
+                                                depCmd.Parameters.AddWithValue("@valRef", dbVal);
+                                                if (!string.IsNullOrEmpty(extraCol))
+                                                {
+                                                    depCmd.Parameters.AddWithValue("@WOLOLO", dbVal);
+                                                }
+                                                depCmd.Parameters.AddWithValue("@valcreated_at", DateTime.Now);
+                                                depCmd.Parameters.AddWithValue("@valupdated_at", DateTime.Now);
+                                                // Console.WriteLine(depSql);
+
+                                                //   await depCmd.ExecuteNonQueryAsync();
+                                                depCmd.ExecuteNonQuery();
+                                               
+                                            }
+                                        }
+                                        // -------------------------------------------------------------
+
+                                        // Guardamos el valor en nuestra lista temporal para usarlo en el INSERT/UPDATE principal
+                                        currentRecordValues.Add((field, dbVal));
+                                        // Console.WriteLine($"CAMPOS {field.DbColumn} ** {dbVal}");
+                                    }
+                                }
+
+                                if (skipRow) continue;
+
+                                // --- NUEVA LÓGICA: UPDATE OR INSERT MANUAL ---
+                                if (currentRecordValues.Count > 0)
+                                {
+                                    // Separar campos llave y campos normales
+                                    var keyFields = currentRecordValues.Where(x => x.Field.IsKey).ToList();
+
+                                    bool recordExists = false;
+
+                                    // Solo verificamos existencia si hay llaves definidas
+                                    if (keyFields.Any())
+                                    {
+                                        // Construir Query de Existencia: SELECT 1 FROM tabla WHERE key1=@p1 AND key2=@p2
+                                        var checkCmd = new NpgsqlCommand();
+                                        checkCmd.Connection = conn;
+                                        checkCmd.Transaction = transaction;
+
+                                        string whereClause = string.Join(" AND ", keyFields.Select((k, i) => $"\"{k.Field.DbColumn}\" = @k{i}"));
+                                        checkCmd.CommandText = $"SELECT COUNT(1) FROM {processConfig.TargetTable} WHERE {whereClause}";
+
+                                        for (int i = 0; i < keyFields.Count; i++)
+                                        {
+                                            checkCmd.Parameters.AddWithValue($"@k{i}", keyFields[i].Value);
+                                        }
+
+                                        long count = (long)(await checkCmd.ExecuteScalarAsync() ?? 0);
+                                        recordExists = count > 0;
+                                    }
+
+                                    var finalCmd = new NpgsqlCommand();
+                                    finalCmd.Connection = conn;
+                                    finalCmd.Transaction = transaction;
+
+                                    if (recordExists)
+                                    {
+                                        // --- UPDATE ---
+                                        // Filtramos campos que no son llave y no son created_at para el SET
+                                        var updateFields = currentRecordValues
+                                            .Where(x => !x.Field.IsKey && x.Field.DbColumn != "created_at")
+                                            .ToList();
+
+                                        if (updateFields.Any())
+                                        {
+                                            var setClauses = new List<string>();
+
+                                            // Agregar parámetros para el SET
+                                            for (int i = 0; i < updateFields.Count; i++)
+                                            {
+                                                string paramName = $"@u{i}";
+                                                setClauses.Add($"\"{updateFields[i].Field.DbColumn}\" = {paramName}");
+                                                finalCmd.Parameters.AddWithValue(paramName, updateFields[i].Value);
+                                            }
+
+                                            // Agregar parámetros para el WHERE (usando las llaves)
+                                            var whereClauses = new List<string>();
+                                            for (int i = 0; i < keyFields.Count; i++)
+                                            {
+                                                string paramName = $"@w{i}";
+                                                whereClauses.Add($"\"{keyFields[i].Field.DbColumn}\" = {paramName}");
+                                                finalCmd.Parameters.AddWithValue(paramName, keyFields[i].Value);
+                                            }
+
+                                            finalCmd.CommandText = $"UPDATE {processConfig.TargetTable} SET {string.Join(", ", setClauses)} WHERE {string.Join(" AND ", whereClauses)}";
+
+                                            Console.WriteLine($"EJECUTANDO UPDATE: {finalCmd.CommandText}");
+                                            await finalCmd.ExecuteNonQueryAsync();
+                                        }
+                                        // Si existe pero no hay campos para actualizar (solo llaves), no hacemos nada.
+                                    }
+                                    else
+                                    {
+                                        // --- INSERT ---
+                                        var colNames = new List<string>();
+                                        var paramNames = new List<string>();
+
+                                        for (int i = 0; i < currentRecordValues.Count; i++)
+                                        {
+                                            colNames.Add($"\"{currentRecordValues[i].Field.DbColumn}\"");
+                                            string pName = $"@p{i}";
+                                            paramNames.Add(pName);
+                                            finalCmd.Parameters.AddWithValue(pName, currentRecordValues[i].Value);
+                                        }
+
+                                        finalCmd.CommandText = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+
+                                        Console.WriteLine($"EJECUTANDO INSERT: {finalCmd.CommandText}");
+                                        await finalCmd.ExecuteNonQueryAsync();
+                                        totalInserted++;
+                                    }
+                                }
+
+                                /* // =================================================================================
+                                // BLOQUE ORIGINAL (UPSERT) - COMENTADO POR REQUERIMIENTO
+                                // Motivo: El cliente indicó que las tablas no siempre tienen constraints unique,
+                                // causando fallos en ON CONFLICT. Se reemplazó por lógica manual SELECT -> UPDATE/INSERT.
+                                // =================================================================================
+                                
+                                if (colNames.Count > 0)
+                                {
+                                    // Se requiere regenerar el comando anterior usando colNames y paramNames que existían en el scope anterior
+                                    // (Este código asume que se descomentarían las listas colNames/paramNames del foreach original)
+                                    
+                                    string sql = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+                                    
+                                    var keyFields = processConfig.Fields.Where(f => f.IsKey).ToList();
+
+                                    if (keyFields.Any())
+                                    {
+                                        var keyCols = keyFields.Select(f => $"\"{f.DbColumn}\"");
+                                        sql += $" ON CONFLICT ({string.Join(", ", keyCols)})";
+                                        
+                                        var updateFields = processConfig.Fields
+                                            .Where(f => !f.IsKey && f.DbColumn != "created_at")
+                                            .ToList();
+
+                                        if (updateFields.Any())
+                                        {
+                                            sql += " DO UPDATE SET ";
+                                            var updateParts = new List<string>();
+                                            foreach (var f in updateFields)
+                                            {
+                                                updateParts.Add($"\"{f.DbColumn}\" = EXCLUDED.\"{f.DbColumn}\"");
+                                            }
+                                            sql += string.Join(", ", updateParts);
+                                        }
+                                        else
+                                        {
+                                            sql += " DO NOTHING";
+                                        }
+                                    }
+                                    cmd.CommandText = sql;
+                                    Console.WriteLine(sql);
+                                    await cmd.ExecuteNonQueryAsync();
+                                    totalInserted++;
+                                }
+                                // =================================================================================
+                                */
+                            }
+                        }
+
+                        await transaction.CommitAsync();
+                    }
+                    catch (Exception)
+                    {
+                        await transaction.RollbackAsync();
+                        throw;
+                    }
+                }
+            }
+
+            return totalInserted;
         }
 
         public async Task<int> ProcessXmlAsync(string interfaceName, string xmlContent)

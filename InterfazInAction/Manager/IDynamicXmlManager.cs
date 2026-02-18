@@ -12,6 +12,7 @@ namespace InterfazInAction.Manager
         /// <param name="xmlContent">El string con el contenido XML completo</param>
         /// <returns>Número total de registros insertados (suma de todas las tablas)</returns>
         Task<int> ProcessXmlAsync(string interfaceName, string xmlContent);
+        Task<int> ProcessXmlAsyncNoUpsert(string interfaceName, string xmlContent);
         Task<DataTable> GetDataForOutboundAsync(string tableName, List<int> ids);
         Task<Dictionary<int, string>> CreateOutboundXmlsAsync(string interfaceName, List<int> recordIds);
     }

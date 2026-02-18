@@ -45,8 +45,8 @@ namespace InterfazInAction.Controllers
 
             try
             {
-         
-                int totalRows = await _xmlManager.ProcessXmlAsync(interfaceName, xmlContent);
+
+                int totalRows = await _xmlManager.ProcessXmlAsyncNoUpsert(interfaceName, xmlContent); //_xmlManager.ProcessXmlAsync(interfaceName, xmlContent);
 
                 /* return Ok(new
                  {
