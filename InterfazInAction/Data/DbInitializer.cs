@@ -224,15 +224,19 @@ namespace InterfazInAction.Data
                     Fields = new List<integrationField>
                     {
                         new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{QUICK_ID}",DbColumn="GENERATE_QUICK_ID",DataType="string"},
-                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{LOG_ID}",DbColumn="GENERATE_GUID",DataType="string"},
-                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{CENTRO}",DbColumn="cedis_code",DataType="string"},
                         new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{INTERFACE_NAME}",DbColumn="module",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{LOG_ID}",DbColumn="log_id",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{ORIGIN}",DbColumn="origin",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="{CENTRO}",DbColumn="warehouse_code",DataType="string"},                        
                         new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="BLDAT",DbColumn="created_at",DataType="datetime"},
-                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="WERKS",DbColumn="cedis_code",DataType="string"},
-                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="CONCEPTO",DbColumn="N/A",DataType="string",DefaultValue="IE"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="WERKS",DbColumn="warehouse_code",DataType="string"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="CONCEPTO",DbColumn="",DataType="string",DefaultValue="IE"},
                         new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="REFERENCIA",DbColumn="erp_reference",DataType="string"},
                         new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="MATNR",DbColumn="item_code",DataType="string",ReferenceTable="Detail"},
-                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="ERFMG",DbColumn="quantity",DataType="decimal",ReferenceTable="Detail"}
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="BISDAT",DbColumn="updated_at",DataType="datetime",ReferenceTable="Detail"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="CHARG",DbColumn="batch",DataType="string",ReferenceTable="Detail"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="ERFMG",DbColumn="quantity",DataType="decimal",ReferenceTable="Detail"},
+                        new integrationField {ProcessName="MMI014_OUTBOUND",XmlPath="MENGE",DbColumn="quantity",DataType="decimal",ReferenceTable="Detail"}
                     }
                 }
             };

@@ -791,7 +791,7 @@ namespace InterfazInAction.Manager
                 var templateFields = config.Fields.Where(f => f.XmlPath.StartsWith("{"));
                 foreach (var field in templateFields)
                 {
-                    string val = GetValueFromRows(field.DbColumn, contextRowForHeader, fallbackRow);
+                    string val = GetValueFromRows(field.DbColumn, field.DefaultValue, contextRowForHeader, fallbackRow);
                     currentXml = currentXml.Replace(field.XmlPath, val);
                 }
 
@@ -807,10 +807,10 @@ namespace InterfazInAction.Manager
                         // Campos que NO son template y NO tienen ReferenceTable (asumimos que ReferenceTable marca los detalles)
                         var headerBodyFields = config.Fields.Where(f => !f.XmlPath.StartsWith("{") && string.IsNullOrEmpty(f.ReferenceTable));
 
-                        foreach (var field in headerBodyFields)
+                        foreach (var field in headerBodyFields.OrderBy(x=>x.Id))
                         {
                             // AQUÍ ESTÁ EL TRUCO: Buscamos en Header, si no está, buscamos en la primera línea
-                            string val = GetValueFromRows(field.DbColumn, contextRowForHeader, fallbackRow);
+                            string val = GetValueFromRows(field.DbColumn,field.DefaultValue, contextRowForHeader, fallbackRow);
                             AddChildElement(headerNode, field.XmlPath, val);
                         }
                     }
@@ -825,7 +825,7 @@ namespace InterfazInAction.Manager
                     // Asumiremos que el nodo en el XML Template (ej: <DT_MovInvDetalleSAP />) es el CONTENEDOR.
 
                     // Campos marcados para detalle (usaremos ReferenceTable = 'Detail' o el nombre de la tabla detalle)
-                    var lineFields = config.Fields.Where(f => !string.IsNullOrEmpty(f.ReferenceTable));
+                    var lineFields = config.Fields.Where(f => !string.IsNullOrEmpty(f.ReferenceTable)).OrderBy(x=>x.Id);
 
                     // Buscamos el contenedor en el XML (ej: DT_MovInvDetalleSAP)
                     // OJO: En tu XML ejemplo, DT_MovInvDetalleSAP parece ser el nodo repetitivo? 
@@ -844,11 +844,11 @@ namespace InterfazInAction.Manager
                     foreach (var lineRow in currentLines)
                     {
                         // Creamos un NUEVO nodo por cada línea
-                        XElement lineNode = new XElement(XName.Get(config.DetailNodeName, xDoc.Root.Name.NamespaceName));
-
+                        // XElement lineNode = new XElement(XName.Get(config.DetailNodeName, xDoc.Root.Name.NamespaceName));
+                        XElement lineNode = new XElement(config.DetailNodeName);
                         foreach (var field in lineFields)
                         {
-                            string val = GetValueFromRows(field.DbColumn, lineRow, null); // Solo buscamos en la línea
+                            string val = GetValueFromRows(field.DbColumn,field.DefaultValue, lineRow, null); // Solo buscamos en la línea
                             AddChildElement(lineNode, field.XmlPath, val);
                         }
 
@@ -857,15 +857,27 @@ namespace InterfazInAction.Manager
                     }
                 }
 
-                result.Add(recordId, xDoc.ToString());
+                string xmlDeclaration = xDoc.Declaration != null
+                        ? xDoc.Declaration.ToString()
+                        : "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+
+                string finalXml = xmlDeclaration + Environment.NewLine + xDoc.ToString();
+
+                result.Add(recordId, finalXml);
             }
 
             return result;
         }
 
         // Helper para buscar valor en Header O en Línea
-        private string GetValueFromRows(string colName, DataRow mainRow, DataRow? fallbackRow)
+        private string GetValueFromRows(string colName, string defaultValue, DataRow mainRow, DataRow? fallbackRow)
         {
+            // 1. Si DbColumn está vacío (ej. CONCEPTO), regresamos el DefaultValue directamente
+            if (string.IsNullOrWhiteSpace(colName))
+            {
+                return defaultValue ?? "";
+            }
+
             if (colName.StartsWith("GENERATE_"))
             {
                 if (colName == "GENERATE_GUID") return Guid.NewGuid().ToString("N");
@@ -873,21 +885,35 @@ namespace InterfazInAction.Manager
                 return "";
             }
 
-            // 1. Buscar en Tabla Principal
-            if (mainRow.Table.Columns.Contains(colName))
+            // 2. Buscar en Tabla Principal
+            if (mainRow != null && mainRow.Table.Columns.Contains(colName))
             {
                 var val = mainRow[colName];
-                if (val != DBNull.Value) return ConvertToString(val);
+                if (val != DBNull.Value)
+                {
+                    string strVal = ConvertToString(val);
+                    if (!string.IsNullOrEmpty(strVal)) return strVal;
+                }
             }
 
-            // 2. Si no está o es nulo, buscar en Tabla Secundaria (Fallback)
+            // 3. Si no está o es nulo, buscar en Tabla Secundaria (Fallback)
             if (fallbackRow != null && fallbackRow.Table.Columns.Contains(colName))
             {
                 var val = fallbackRow[colName];
-                if (val != DBNull.Value) return ConvertToString(val);
+                if (val != DBNull.Value)
+                {
+                    string strVal = ConvertToString(val);
+                    if (!string.IsNullOrEmpty(strVal)) return strVal;
+                }
             }
 
-            return ""; // O valor por defecto del campo si lo pasáramos
+            // 4. Si la columna existía pero el valor en BD era NULL o vacío, usamos el DefaultValue
+            if (!string.IsNullOrEmpty(defaultValue))
+            {
+                return defaultValue;
+            }
+
+            return "";
         }
 
         private string ConvertToString(object val)
