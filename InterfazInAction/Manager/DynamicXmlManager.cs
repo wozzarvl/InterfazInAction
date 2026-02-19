@@ -45,21 +45,23 @@ namespace InterfazInAction.Manager
                 {
                     try
                     {
+                        // =================================================================
+                        // 1. DICCIONARIO DE CONTEXTO (Para guardar los IDs generados)
+                        // =================================================================
+                        var generatedIdsContext = new Dictionary<string, object>();
+
                         foreach (var processConfig in configs.OrderBy(p => p.Order))
                         {
                             var nodes = xDoc.XPathSelectElements(processConfig.XmlIterator).ToList();
 
                             if (!nodes.Any()) continue;
 
-                            // Iteramos sobre cada nodo XML encontrado
                             foreach (var node in nodes)
                             {
-                                // Lista para almacenar temporalmente los campos y valores de ESTE registro
                                 var currentRecordValues = new List<(integrationField Field, object Value)>();
-
                                 bool skipRow = false;
 
-                                // --- 1. EXTRACCIÓN Y MAPEO DE VALORES ---
+                                // --- EXTRACCIÓN Y MAPEO DE VALORES ---
                                 foreach (var field in processConfig.Fields.OrderBy(x => x.Id))
                                 {
                                     object dbVal = null;
@@ -67,6 +69,22 @@ namespace InterfazInAction.Manager
                                     if (field.DataType == "CURRENT_TIMESTAMP")
                                     {
                                         dbVal = DateTime.Now;
+                                    }
+                                    // =================================================================
+                                    // 2. NUEVA REGLA: OBTENER ID DEL PADRE (PARENT_ID:nombre_tabla)
+                                    // =================================================================
+                                    else if (!string.IsNullOrEmpty(field.XmlPath) && field.XmlPath.StartsWith("PARENT_ID:"))
+                                    {
+                                        string parentTable = field.XmlPath.Split(':')[1].Trim();
+                                        if (generatedIdsContext.TryGetValue(parentTable, out var parentId))
+                                        {
+                                            // Convertimos el objeto al tipo de dato configurado (usualmente int)
+                                            dbVal = ConvertValue(parentId.ToString(), field.DataType);
+                                        }
+                                        else
+                                        {
+                                            dbVal = DBNull.Value; // No se encontró el padre
+                                        }
                                     }
                                     else if (string.IsNullOrEmpty(field.XmlPath))
                                     {
@@ -78,7 +96,6 @@ namespace InterfazInAction.Manager
                                         string extractPath = field.XmlPath;
                                         string mappingRule = null;
 
-                                        // 1. DETECTAR REGLA DE MAPEO
                                         if (!string.IsNullOrEmpty(extractPath) && extractPath.Contains("|"))
                                         {
                                             var parts = extractPath.Split('|', 2);
@@ -86,20 +103,14 @@ namespace InterfazInAction.Manager
                                             mappingRule = parts[1].Trim();
                                         }
 
-                                        // 2. EXTRACCIÓN
                                         if (!string.IsNullOrEmpty(extractPath))
                                         {
                                             if (extractPath.Contains("{") && extractPath.Contains("}"))
-                                            {
                                                 valStr = ResolveTemplate(node, extractPath);
-                                            }
                                             else
-                                            {
                                                 valStr = GetValueFromXml(node, extractPath);
-                                            }
                                         }
 
-                                        // 3. TRANSFORMACIÓN
                                         if (!string.IsNullOrEmpty(mappingRule))
                                         {
                                             valStr = ApplyValueMapping(valStr, mappingRule);
@@ -109,17 +120,14 @@ namespace InterfazInAction.Manager
                                             }
                                         }
 
-                                        // 4. VALOR POR DEFECTO
                                         if (string.IsNullOrEmpty(valStr) && !string.IsNullOrEmpty(field.DefaultValue))
                                         {
                                             valStr = field.DefaultValue;
                                         }
 
-                                        // 5. CONVERSIÓN
                                         dbVal = ConvertValue(valStr, field.DataType);
                                     }
 
-                                    // Si es llave y viene nulo, saltamos el registro completo
                                     if (field.IsKey && (dbVal == null || dbVal == DBNull.Value))
                                     {
                                         skipRow = true;
@@ -128,7 +136,7 @@ namespace InterfazInAction.Manager
 
                                     if (dbVal != null)
                                     {
-                                        // --- INSERCIÓN EN TABLAS REFERENCIADAS (DEPENDENCIAS) ---
+                                        // --- INSERCIÓN EN TABLAS REFERENCIADAS ---
                                         if (!string.IsNullOrEmpty(field.ReferenceTable) && !string.IsNullOrEmpty(field.ReferenceColumn))
                                         {
                                             var refParts = field.ReferenceColumn.Split('|');
@@ -144,83 +152,75 @@ namespace InterfazInAction.Manager
                                                 insertVals += ",@WOLOLO";
                                             }
 
-
-
-                                            // NOTA: Aquí se mantiene el ON CONFLICT DO NOTHING porque es tabla auxiliar
                                             string depSql = $@"
-                                                            INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
-                                                            VALUES ({insertVals}, @valcreated_at, @valupdated_at)
-                                                            ON CONFLICT ({mainCol}) DO NOTHING";
-
+                                                    INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
+                                                    VALUES ({insertVals}, @valcreated_at, @valupdated_at)
+                                                    ON CONFLICT ({mainCol}) DO NOTHING";
 
                                             if (field.ReferenceTable.Equals("erp.measure_unit") && dbVal.Equals("*CJ*"))
                                             {
                                                 depSql = $@"
-                                                            INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
-                                                            VALUES ({insertVals}, @valcreated_at, @valupdated_at)";
+                                                    INSERT INTO {field.ReferenceTable} ({insertCols}, created_at, updated_at) 
+                                                    VALUES ({insertVals}, @valcreated_at, @valupdated_at)";
                                             }
                                             using (var depCmd = new NpgsqlCommand(depSql, conn, transaction))
                                             {
                                                 depCmd.Parameters.AddWithValue("@valRef", dbVal);
                                                 if (!string.IsNullOrEmpty(extraCol))
-                                                {
                                                     depCmd.Parameters.AddWithValue("@WOLOLO", dbVal);
-                                                }
+
                                                 depCmd.Parameters.AddWithValue("@valcreated_at", DateTime.Now);
                                                 depCmd.Parameters.AddWithValue("@valupdated_at", DateTime.Now);
-                                                // Console.WriteLine(depSql);
 
-                                                //   await depCmd.ExecuteNonQueryAsync();
                                                 depCmd.ExecuteNonQuery();
-                                               
                                             }
                                         }
-                                        // -------------------------------------------------------------
 
-                                        // Guardamos el valor en nuestra lista temporal para usarlo en el INSERT/UPDATE principal
                                         currentRecordValues.Add((field, dbVal));
-                                        // Console.WriteLine($"CAMPOS {field.DbColumn} ** {dbVal}");
                                     }
                                 }
 
                                 if (skipRow) continue;
 
-                                // --- NUEVA LÓGICA: UPDATE OR INSERT MANUAL ---
+                                // --- UPDATE OR INSERT MANUAL ---
                                 if (currentRecordValues.Count > 0)
                                 {
-                                    // Separar campos llave y campos normales
                                     var keyFields = currentRecordValues.Where(x => x.Field.IsKey).ToList();
-
                                     bool recordExists = false;
 
-                                    // Solo verificamos existencia si hay llaves definidas
+                                    var finalCmd = new NpgsqlCommand();
+                                    finalCmd.Connection = conn;
+                                    finalCmd.Transaction = transaction;
+
                                     if (keyFields.Any())
                                     {
-                                        // Construir Query de Existencia: SELECT 1 FROM tabla WHERE key1=@p1 AND key2=@p2
                                         var checkCmd = new NpgsqlCommand();
                                         checkCmd.Connection = conn;
                                         checkCmd.Transaction = transaction;
 
                                         string whereClause = string.Join(" AND ", keyFields.Select((k, i) => $"\"{k.Field.DbColumn}\" = @k{i}"));
-                                        checkCmd.CommandText = $"SELECT COUNT(1) FROM {processConfig.TargetTable} WHERE {whereClause}";
+
+                                        // =================================================================
+                                        // 3. LEEMOS EL ID DEL REGISTRO SI YA EXISTE (Para pasarlo a los hijos)
+                                        // =================================================================
+                                        checkCmd.CommandText = $"SELECT \"id\" FROM {processConfig.TargetTable} WHERE {whereClause} LIMIT 1";
 
                                         for (int i = 0; i < keyFields.Count; i++)
                                         {
                                             checkCmd.Parameters.AddWithValue($"@k{i}", keyFields[i].Value);
                                         }
 
-                                        long count = (long)(await checkCmd.ExecuteScalarAsync() ?? 0);
-                                        recordExists = count > 0;
+                                        var resultId = await checkCmd.ExecuteScalarAsync();
+                                        if (resultId != null && resultId != DBNull.Value)
+                                        {
+                                            recordExists = true;
+                                            generatedIdsContext[processConfig.TargetTable] = resultId; // Guardar ID existente
+                                        }
                                     }
-
-                                    var finalCmd = new NpgsqlCommand();
-                                    finalCmd.Connection = conn;
-                                    finalCmd.Transaction = transaction;
 
                                     if (recordExists)
                                     {
                                         // --- UPDATE ---
-                                        // Filtramos campos que no son llave y no son created_at para el SET
                                         var updateFields = currentRecordValues
                                             .Where(x => !x.Field.IsKey && x.Field.DbColumn != "created_at")
                                             .ToList();
@@ -228,8 +228,6 @@ namespace InterfazInAction.Manager
                                         if (updateFields.Any())
                                         {
                                             var setClauses = new List<string>();
-
-                                            // Agregar parámetros para el SET
                                             for (int i = 0; i < updateFields.Count; i++)
                                             {
                                                 string paramName = $"@u{i}";
@@ -237,7 +235,6 @@ namespace InterfazInAction.Manager
                                                 finalCmd.Parameters.AddWithValue(paramName, updateFields[i].Value);
                                             }
 
-                                            // Agregar parámetros para el WHERE (usando las llaves)
                                             var whereClauses = new List<string>();
                                             for (int i = 0; i < keyFields.Count; i++)
                                             {
@@ -248,10 +245,8 @@ namespace InterfazInAction.Manager
 
                                             finalCmd.CommandText = $"UPDATE {processConfig.TargetTable} SET {string.Join(", ", setClauses)} WHERE {string.Join(" AND ", whereClauses)}";
 
-                                            Console.WriteLine($"EJECUTANDO UPDATE: {finalCmd.CommandText}");
                                             await finalCmd.ExecuteNonQueryAsync();
                                         }
-                                        // Si existe pero no hay campos para actualizar (solo llaves), no hacemos nada.
                                     }
                                     else
                                     {
@@ -267,60 +262,20 @@ namespace InterfazInAction.Manager
                                             finalCmd.Parameters.AddWithValue(pName, currentRecordValues[i].Value);
                                         }
 
-                                        finalCmd.CommandText = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
+                                        // =================================================================
+                                        // 4. RETURNING "id" para capturarlo y guardarlo en memoria
+                                        // =================================================================
+                                        finalCmd.CommandText = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)}) RETURNING \"id\"";
 
-                                        Console.WriteLine($"EJECUTANDO INSERT: {finalCmd.CommandText}");
-                                        await finalCmd.ExecuteNonQueryAsync();
+                                        var insertedId = await finalCmd.ExecuteScalarAsync();
+                                        if (insertedId != null && insertedId != DBNull.Value)
+                                        {
+                                            generatedIdsContext[processConfig.TargetTable] = insertedId; // Guardar ID nuevo
+                                        }
+
                                         totalInserted++;
                                     }
                                 }
-
-                                /* // =================================================================================
-                                // BLOQUE ORIGINAL (UPSERT) - COMENTADO POR REQUERIMIENTO
-                                // Motivo: El cliente indicó que las tablas no siempre tienen constraints unique,
-                                // causando fallos en ON CONFLICT. Se reemplazó por lógica manual SELECT -> UPDATE/INSERT.
-                                // =================================================================================
-                                
-                                if (colNames.Count > 0)
-                                {
-                                    // Se requiere regenerar el comando anterior usando colNames y paramNames que existían en el scope anterior
-                                    // (Este código asume que se descomentarían las listas colNames/paramNames del foreach original)
-                                    
-                                    string sql = $"INSERT INTO {processConfig.TargetTable} ({string.Join(", ", colNames)}) VALUES ({string.Join(", ", paramNames)})";
-                                    
-                                    var keyFields = processConfig.Fields.Where(f => f.IsKey).ToList();
-
-                                    if (keyFields.Any())
-                                    {
-                                        var keyCols = keyFields.Select(f => $"\"{f.DbColumn}\"");
-                                        sql += $" ON CONFLICT ({string.Join(", ", keyCols)})";
-                                        
-                                        var updateFields = processConfig.Fields
-                                            .Where(f => !f.IsKey && f.DbColumn != "created_at")
-                                            .ToList();
-
-                                        if (updateFields.Any())
-                                        {
-                                            sql += " DO UPDATE SET ";
-                                            var updateParts = new List<string>();
-                                            foreach (var f in updateFields)
-                                            {
-                                                updateParts.Add($"\"{f.DbColumn}\" = EXCLUDED.\"{f.DbColumn}\"");
-                                            }
-                                            sql += string.Join(", ", updateParts);
-                                        }
-                                        else
-                                        {
-                                            sql += " DO NOTHING";
-                                        }
-                                    }
-                                    cmd.CommandText = sql;
-                                    Console.WriteLine(sql);
-                                    await cmd.ExecuteNonQueryAsync();
-                                    totalInserted++;
-                                }
-                                // =================================================================================
-                                */
                             }
                         }
 
